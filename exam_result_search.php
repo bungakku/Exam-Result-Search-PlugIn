@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Exam Result Manager
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.6.0
+ * Version: 4.7.0
  * Author: Biswajit Thokchom
  * Author URI: https://biswazit.in
  * Text Domain: exam-result-manager
@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.6.0' );
+define( 'ERM_VERSION', '4.7.0' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -22,57 +22,71 @@ define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
  * GitHub Updater – enables auto‑update notifications from GitHub releases.
  */
 class ERM_GitHub_Updater {
-    private $plugin_slug;
     private $plugin_file;
+    private $plugin_slug;   // basename, e.g. exam-result-manager/exam_result_search.php
+    private $slug;          // folder slug only, e.g. exam-result-manager
     private $github_repo;
-    private $transient_key;
+    private $error_option;
+    private $last_error = '';
 
     public function __construct( $plugin_file, $github_repo ) {
-        $this->plugin_file   = $plugin_file;
-        $this->plugin_slug   = plugin_basename( $plugin_file );
-        $this->github_repo   = $github_repo;
-        $this->transient_key = 'erm_github_update_check';
+        $this->plugin_file  = $plugin_file;
+        $this->plugin_slug  = plugin_basename( $plugin_file );
+        $this->slug         = dirname( $this->plugin_slug );
+        $this->github_repo  = $github_repo;
+        $this->error_option = 'erm_github_update_error';
 
         add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'check_for_update' ) );
         add_filter( 'plugins_api', array( $this, 'plugin_info' ), 10, 3 );
         add_action( 'in_plugin_update_message-' . $this->plugin_slug, array( $this, 'update_message' ), 10, 2 );
+        add_action( 'admin_notices', array( $this, 'maybe_show_error_notice' ) );
+        add_filter( 'plugin_action_links_' . $this->plugin_slug, array( $this, 'add_check_update_link' ) );
+        add_action( 'admin_init', array( $this, 'maybe_handle_manual_check' ) );
     }
 
+    /**
+     * Hooked into WordPress's own update-check transient (refreshed on its normal
+     * schedule, or immediately after "Check Again" on the Updates screen / our
+     * manual check link below). No separate plugin-level cache layer here —
+     * that was the previous source of stale "no update available" results
+     * surviving past an actual new release.
+     */
     public function check_for_update( $transient ) {
         if ( empty( $transient->checked ) ) {
             return $transient;
         }
 
-        $cached = get_transient( $this->transient_key );
-        if ( false !== $cached ) {
-            if ( isset( $cached['version'] ) && version_compare( $cached['version'], ERM_VERSION, '>' ) ) {
-                $transient->response[ $this->plugin_slug ] = $cached['update_data'];
-            }
+        $release = $this->get_latest_release();
+
+        if ( ! $release || ! isset( $release->tag_name ) ) {
+            // Don't silently say nothing -- remember why, so the admin can see it.
+            update_option( $this->error_option, $this->last_error ? $this->last_error : __( 'Could not reach the GitHub releases API.', 'exam-result-manager' ) );
             return $transient;
         }
 
-        $release = $this->get_latest_release();
-        if ( ! $release || ! isset( $release->tag_name ) ) {
-            return $transient;
-        }
+        delete_option( $this->error_option );
 
         $latest_version = ltrim( $release->tag_name, 'v' );
         if ( version_compare( $latest_version, ERM_VERSION, '>' ) ) {
             $update_data = (object) array(
-                'slug'        => $this->plugin_slug,
+                'slug'        => $this->slug,
+                'plugin'      => $this->plugin_slug,
                 'new_version' => $latest_version,
                 'package'     => $release->zipball_url,
                 'url'         => 'https://github.com/' . $this->github_repo,
-                'tested'      => '6.4',
+                'tested'      => '6.7',
             );
             $transient->response[ $this->plugin_slug ] = $update_data;
-
-            set_transient( $this->transient_key, array(
-                'version'     => $latest_version,
-                'update_data' => $update_data,
-            ), 2 * HOUR_IN_SECONDS );
         } else {
-            set_transient( $this->transient_key, array( 'version' => ERM_VERSION ), 2 * HOUR_IN_SECONDS );
+            // Explicitly mark as "no update" so the Updates screen doesn't
+            // keep treating it as unchecked.
+            unset( $transient->response[ $this->plugin_slug ] );
+            $transient->no_update[ $this->plugin_slug ] = (object) array(
+                'slug'        => $this->slug,
+                'plugin'      => $this->plugin_slug,
+                'new_version' => ERM_VERSION,
+                'url'         => 'https://github.com/' . $this->github_repo,
+            );
         }
 
         return $transient;
@@ -80,17 +94,44 @@ class ERM_GitHub_Updater {
 
     private function get_latest_release() {
         $url = 'https://api.github.com/repos/' . $this->github_repo . '/releases/latest';
-        $response = wp_remote_get( $url, array( 'timeout' => 10 ) );
+        $response = wp_remote_get( $url, array(
+            'timeout' => 10,
+            'headers' => array( 'Accept' => 'application/vnd.github+json' ),
+        ) );
+
         if ( is_wp_error( $response ) ) {
+            $this->last_error = sprintf(
+                /* translators: %s: error message */
+                __( 'GitHub update check failed: %s', 'exam-result-manager' ),
+                $response->get_error_message()
+            );
             return null;
         }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        if ( 200 !== (int) $code ) {
+            $this->last_error = sprintf(
+                /* translators: %1$s: repo slug, %2$d: HTTP status code */
+                __( 'GitHub returned an unexpected response for %1$s (HTTP %2$d). Check that the repository exists and has at least one published release.', 'exam-result-manager' ),
+                $this->github_repo,
+                (int) $code
+            );
+            return null;
+        }
+
         $body = wp_remote_retrieve_body( $response );
         $data = json_decode( $body );
-        return isset( $data->tag_name ) ? $data : null;
+
+        if ( ! isset( $data->tag_name ) ) {
+            $this->last_error = __( 'GitHub API response did not contain a release tag. Make sure a release (not just a tag) has been published.', 'exam-result-manager' );
+            return null;
+        }
+
+        return $data;
     }
 
     public function plugin_info( $false, $action, $args ) {
-        if ( $action !== 'plugin_information' || $args->slug !== $this->plugin_slug ) {
+        if ( $action !== 'plugin_information' || empty( $args->slug ) || $args->slug !== $this->slug ) {
             return $false;
         }
         $release = $this->get_latest_release();
@@ -100,7 +141,7 @@ class ERM_GitHub_Updater {
 
         $info = (object) array(
             'name'          => 'Exam Result Manager',
-            'slug'          => $this->plugin_slug,
+            'slug'          => $this->slug,
             'version'       => ltrim( $release->tag_name, 'v' ),
             'author'        => 'Biswajit Thokchom',
             'author_profile' => 'https://biswazit.in',
@@ -119,7 +160,7 @@ class ERM_GitHub_Updater {
         if ( ! empty( $release->body ) ) {
             return nl2br( esc_html( $release->body ) );
         }
-        return 'See the <a href="https://github.com/' . $this->github_repo . '/releases">release notes</a> on GitHub.';
+        return 'See the <a href="https://github.com/' . esc_attr( $this->github_repo ) . '/releases">release notes</a> on GitHub.';
     }
 
     public function update_message( $plugin_data, $response ) {
@@ -127,10 +168,55 @@ class ERM_GitHub_Updater {
             echo ' <em>' . __( 'Update available from GitHub.', 'exam-result-manager' ) . '</em>';
         }
     }
+
+    // Adds a "Check for updates" link on the Plugins list row.
+    public function add_check_update_link( $links ) {
+        if ( ! current_user_can( 'update_plugins' ) ) {
+            return $links;
+        }
+        $url = wp_nonce_url(
+            add_query_arg( array( 'erm_check_update' => '1' ), admin_url( 'plugins.php' ) ),
+            'erm_check_update'
+        );
+        $links['erm-check-update'] = '<a href="' . esc_url( $url ) . '">' . esc_html__( 'Check for updates', 'exam-result-manager' ) . '</a>';
+        return $links;
+    }
+
+    // Handles the manual "Check for updates" click: clears WP's own update
+    // transient so the very next admin page load re-runs check_for_update().
+    public function maybe_handle_manual_check() {
+        if ( ! isset( $_GET['erm_check_update'] ) || ! current_user_can( 'update_plugins' ) ) {
+            return;
+        }
+        if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( $_GET['_wpnonce'], 'erm_check_update' ) ) {
+            return;
+        }
+        delete_site_transient( 'update_plugins' );
+        wp_redirect( remove_query_arg( array( 'erm_check_update', '_wpnonce' ) ) );
+        exit;
+    }
+
+    // Surfaces the last GitHub fetch error (if any) on the Plugins screen,
+    // instead of silently behaving as if everything is up to date.
+    public function maybe_show_error_notice() {
+        $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+        if ( ! $screen || 'plugins' !== $screen->id || ! current_user_can( 'update_plugins' ) ) {
+            return;
+        }
+        $error = get_option( $this->error_option );
+        if ( ! $error ) {
+            return;
+        }
+        echo '<div class="notice notice-warning is-dismissible"><p>' .
+            '<strong>' . esc_html__( 'Exam Result Manager update check:', 'exam-result-manager' ) . '</strong> ' .
+            esc_html( $error ) .
+            '</p></div>';
+    }
 }
 
 // Initialize updater
 new ERM_GitHub_Updater( __FILE__, ERM_GITHUB_REPO );
+
 
 // --------------------------------------------------------------------------
 
@@ -454,6 +540,10 @@ class ExamResultManager {
         register_setting( 'exam_result_settings_group', 'exam_institute_tagline', 'sanitize_text_field' );
         register_setting( 'exam_result_settings_group', 'exam_logo_width', array( $this, 'sanitize_logo_width' ) );
         register_setting( 'exam_result_settings_group', 'exam_logo_title_gap', array( $this, 'sanitize_logo_gap' ) );
+        register_setting( 'exam_result_settings_group', 'exam_header_layout', array( $this, 'sanitize_header_layout' ) );
+        register_setting( 'exam_result_settings_group', 'exam_header_align', array( $this, 'sanitize_align' ) );
+        register_setting( 'exam_result_settings_group', 'exam_title_size', array( $this, 'sanitize_title_size' ) );
+        register_setting( 'exam_result_settings_group', 'exam_tagline_size', array( $this, 'sanitize_tagline_size' ) );
         register_setting( 'exam_result_settings_group', 'exam_max_internal', 'absint' );
         register_setting( 'exam_result_settings_group', 'exam_max_external', 'absint' );
         register_setting( 'exam_result_settings_group', 'exam_max_practical', 'absint' );
@@ -480,12 +570,52 @@ class ExamResultManager {
         return $value;
     }
 
+    // Logo position relative to the title/tagline block
+    public function sanitize_header_layout( $value ) {
+        $allowed = array( 'logo_left', 'logo_right', 'logo_top' );
+        return in_array( $value, $allowed, true ) ? $value : 'logo_left';
+    }
+
+    // Shared left/center/right alignment (title+tagline block, and logo when stacked on top)
+    public function sanitize_align( $value ) {
+        $allowed = array( 'left', 'center', 'right' );
+        return in_array( $value, $allowed, true ) ? $value : 'left';
+    }
+
+    // Title font size (px)
+    public function sanitize_title_size( $value ) {
+        $value = absint( $value );
+        if ( $value < 10 ) {
+            $value = 10;
+        }
+        if ( $value > 72 ) {
+            $value = 72;
+        }
+        return $value;
+    }
+
+    // Tagline font size (px)
+    public function sanitize_tagline_size( $value ) {
+        $value = absint( $value );
+        if ( $value < 8 ) {
+            $value = 8;
+        }
+        if ( $value > 48 ) {
+            $value = 48;
+        }
+        return $value;
+    }
+
     public function render_settings_page() {
         $logo_url     = get_option( 'exam_institute_logo', '' );
         $logo_width   = get_option( 'exam_logo_width', 120 );
         $logo_gap     = get_option( 'exam_logo_title_gap', 20 );
         $institute    = get_option( 'exam_institute_name', '' );
         $tagline      = get_option( 'exam_institute_tagline', '' );
+        $layout       = get_option( 'exam_header_layout', 'logo_left' );
+        $align        = get_option( 'exam_header_align', 'left' );
+        $title_size   = get_option( 'exam_title_size', 24 );
+        $tagline_size = get_option( 'exam_tagline_size', 14 );
         ?>
         <div class="wrap">
             <h1><?php _e( 'Marksheet Settings', 'exam-result-manager' ); ?></h1>
@@ -518,22 +648,50 @@ class ExamResultManager {
                         </td>
                     </tr>
                     <tr>
+                        <th scope="row"><label for="exam_header_layout"><?php _e( 'Logo Position', 'exam-result-manager' ); ?></label></th>
+                        <td>
+                            <select name="exam_header_layout" id="exam_header_layout">
+                                <option value="logo_left" <?php selected( $layout, 'logo_left' ); ?>><?php _e( 'Left of title', 'exam-result-manager' ); ?></option>
+                                <option value="logo_right" <?php selected( $layout, 'logo_right' ); ?>><?php _e( 'Right of title', 'exam-result-manager' ); ?></option>
+                                <option value="logo_top" <?php selected( $layout, 'logo_top' ); ?>><?php _e( 'Above title', 'exam-result-manager' ); ?></option>
+                            </select>
+                            <p class="description"><?php _e( 'Where the logo sits relative to the institute name and tagline.', 'exam-result-manager' ); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
                         <th scope="row"><label for="exam_logo_title_gap"><?php _e( 'Logo &ndash; Title Gap', 'exam-result-manager' ); ?></label></th>
                         <td>
                             <input type="number" name="exam_logo_title_gap" id="exam_logo_title_gap" value="<?php echo esc_attr( $logo_gap ); ?>" min="0" max="200" step="1" style="width:90px;"> px
-                            <p class="description"><?php _e( 'Horizontal spacing between the logo and the institute name/tagline block.', 'exam-result-manager' ); ?></p>
+                            <p class="description"><?php _e( 'Spacing between the logo and the institute name/tagline block (horizontal if the logo is left/right, vertical if it is above).', 'exam-result-manager' ); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="exam_header_align"><?php _e( 'Header Alignment', 'exam-result-manager' ); ?></label></th>
+                        <td>
+                            <select name="exam_header_align" id="exam_header_align">
+                                <option value="left" <?php selected( $align, 'left' ); ?>><?php _e( 'Left', 'exam-result-manager' ); ?></option>
+                                <option value="center" <?php selected( $align, 'center' ); ?>><?php _e( 'Center', 'exam-result-manager' ); ?></option>
+                                <option value="right" <?php selected( $align, 'right' ); ?>><?php _e( 'Right', 'exam-result-manager' ); ?></option>
+                            </select>
+                            <p class="description"><?php _e( 'Text alignment of the title/tagline block. Also controls where the logo sits when "Above title" is selected.', 'exam-result-manager' ); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="exam_title_size"><?php _e( 'Title Font Size', 'exam-result-manager' ); ?></label></th>
+                        <td>
+                            <input type="number" name="exam_title_size" id="exam_title_size" value="<?php echo esc_attr( $title_size ); ?>" min="10" max="72" step="1" style="width:90px;"> px
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="exam_tagline_size"><?php _e( 'Tagline Font Size', 'exam-result-manager' ); ?></label></th>
+                        <td>
+                            <input type="number" name="exam_tagline_size" id="exam_tagline_size" value="<?php echo esc_attr( $tagline_size ); ?>" min="8" max="48" step="1" style="width:90px;"> px
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><?php _e( 'Header Preview', 'exam-result-manager' ); ?></th>
                         <td>
-                            <div id="erm-header-preview" style="display:flex; align-items:center; border:1px solid #ddd; background:#fff; padding:16px; max-width:600px; gap:<?php echo esc_attr( $logo_gap ); ?>px;">
-                                <img id="erm-preview-logo" src="<?php echo esc_url( $logo_url ); ?>" style="width:<?php echo esc_attr( $logo_width ); ?>px; height:auto; display:<?php echo $logo_url ? 'block' : 'none'; ?>;" alt="">
-                                <div>
-                                    <div id="erm-preview-name" style="font-size:20px; font-weight:700; color:#0f172a;"><?php echo esc_html( $institute ? $institute : __( 'Institute Name', 'exam-result-manager' ) ); ?></div>
-                                    <div id="erm-preview-tagline" style="font-size:13px; color:#64748b; margin-top:4px; <?php echo $tagline ? '' : 'display:none;'; ?>"><?php echo esc_html( $tagline ); ?></div>
-                                </div>
-                            </div>
+                            <?php $this->render_institute_header( 'preview' ); ?>
                             <p class="description"><?php _e( 'This preview updates live as you edit the fields above (save to apply on the site).', 'exam-result-manager' ); ?></p>
                         </td>
                     </tr>
@@ -565,38 +723,179 @@ class ExamResultManager {
                 custom_uploader.on('select', function() {
                     var attachment = custom_uploader.state().get('selection').first().toJSON();
                     $('#exam_institute_logo').val(attachment.url);
-                    $('#erm-preview-logo').attr('src', attachment.url).show();
+                    rebuildPreview();
                 });
                 custom_uploader.open();
             });
 
-            // Live preview wiring
-            $('#exam_institute_logo').on('input', function() {
-                var url = $(this).val();
-                if (url) {
-                    $('#erm-preview-logo').attr('src', url).show();
-                } else {
-                    $('#erm-preview-logo').hide();
+            // Live preview: any change to a relevant field re-renders the whole
+            // preview block via AJAX-free client-side rebuild, so layout changes
+            // (logo position, alignment) are reflected exactly, not just CSS tweaks.
+            var fields = [
+                '#exam_institute_name', '#exam_institute_tagline', '#exam_institute_logo',
+                '#exam_logo_width', '#exam_logo_title_gap', '#exam_header_layout',
+                '#exam_header_align', '#exam_title_size', '#exam_tagline_size'
+            ];
+
+            function currentValues() {
+                return {
+                    name: $('#exam_institute_name').val(),
+                    tagline: $('#exam_institute_tagline').val(),
+                    logo: $('#exam_institute_logo').val(),
+                    logoWidth: parseInt($('#exam_logo_width').val(), 10) || 0,
+                    gap: parseInt($('#exam_logo_title_gap').val(), 10) || 0,
+                    layout: $('#exam_header_layout').val(),
+                    align: $('#exam_header_align').val(),
+                    titleSize: parseInt($('#exam_title_size').val(), 10) || 24,
+                    taglineSize: parseInt($('#exam_tagline_size').val(), 10) || 14
+                };
+            }
+
+            function rebuildPreview() {
+                var v = currentValues();
+                var $wrap = $('#erm-header-preview-wrap');
+                $wrap.empty();
+
+                var flexDirection = (v.layout === 'logo_top') ? 'column' : (v.layout === 'logo_right' ? 'row-reverse' : 'row');
+                var alignItems = (v.layout === 'logo_top') ? (v.align === 'center' ? 'center' : (v.align === 'right' ? 'flex-end' : 'flex-start')) : 'center';
+                var justifyContent = (v.align === 'center') ? 'center' : (v.align === 'right' ? 'flex-end' : 'flex-start');
+
+                var containerCss = {
+                    display: 'flex',
+                    flexDirection: flexDirection,
+                    alignItems: alignItems,
+                    gap: v.gap + 'px',
+                    border: '1px solid #ddd',
+                    background: '#fff',
+                    padding: '16px',
+                    maxWidth: '600px',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    flexWrap: 'wrap'
+                };
+                if (v.layout !== 'logo_top') {
+                    containerCss.justifyContent = justifyContent;
                 }
+                var $container = $('<div></div>').css(containerCss);
+
+                if (v.logo) {
+                    $container.append(
+                        $('<img>').attr('src', v.logo).css({ width: v.logoWidth + 'px', maxWidth: '100%', height: 'auto', flex: '0 0 auto', display: 'block' })
+                    );
+                }
+
+                var $textBlock = $('<div></div>').css({ textAlign: v.align, width: (v.layout === 'logo_top') ? '100%' : 'auto' });
+                if (v.name) {
+                    $textBlock.append($('<div></div>').css({ fontWeight: 700, color: '#0f172a', fontSize: v.titleSize + 'px' }).text(v.name));
+                } else {
+                    $textBlock.append($('<div></div>').css({ fontWeight: 700, color: '#0f172a', fontSize: v.titleSize + 'px' }).text('<?php echo esc_js( __( 'Institute Name', 'exam-result-manager' ) ); ?>'));
+                }
+                if (v.tagline) {
+                    $textBlock.append($('<div></div>').css({ color: '#64748b', fontStyle: 'italic', marginTop: '4px', fontSize: v.taglineSize + 'px' }).text(v.tagline));
+                }
+                $container.append($textBlock);
+                $wrap.append($container);
+            }
+
+            fields.forEach(function(sel) {
+                $(sel).on('input change', rebuildPreview);
             });
-            $('#exam_logo_width').on('input', function() {
-                var w = parseInt($(this).val(), 10) || 0;
-                $('#erm-preview-logo').css('width', w + 'px');
-            });
-            $('#exam_logo_title_gap').on('input', function() {
-                var g = parseInt($(this).val(), 10) || 0;
-                $('#erm-header-preview').css('gap', g + 'px');
-            });
-            $('#exam_institute_name').on('input', function() {
-                $('#erm-preview-name').text($(this).val() || '<?php echo esc_js( __( 'Institute Name', 'exam-result-manager' ) ); ?>');
-            });
-            $('#exam_institute_tagline').on('input', function() {
-                var t = $(this).val();
-                $('#erm-preview-tagline').text(t).toggle(!!t);
-            });
+
+            // Initial paint of the preview block.
+            rebuildPreview();
         });
         </script>
         <?php
+    }
+
+    /**
+     * Renders the institute header (logo + name + tagline) using the saved
+     * layout settings. Shared by the settings-page preview, the frontend
+     * result card, and the printable marksheet so all three stay in sync.
+     *
+     * @param string $context 'frontend' | 'print' | 'preview'
+     */
+    private function render_institute_header( $context = 'frontend' ) {
+        // The settings-page preview is fully owned and rebuilt by client-side
+        // JS (see rebuildPreview() in render_settings_page()) so that changing
+        // layout/alignment/size fields updates instantly without a page reload.
+        // We just render the empty wrapper here; JS fills it on page load.
+        if ( 'preview' === $context ) {
+            echo '<div id="erm-header-preview-wrap"></div>';
+            return;
+        }
+
+        $institute_name = get_option( 'exam_institute_name', '' );
+        $logo_url       = get_option( 'exam_institute_logo', '' );
+        $tagline        = get_option( 'exam_institute_tagline', '' );
+        $logo_width     = get_option( 'exam_logo_width', 120 );
+        $logo_gap       = get_option( 'exam_logo_title_gap', 20 );
+        $layout         = get_option( 'exam_header_layout', 'logo_left' );
+        $align          = get_option( 'exam_header_align', 'left' );
+        $title_size     = get_option( 'exam_title_size', 24 );
+        $tagline_size   = get_option( 'exam_tagline_size', 14 );
+
+        if ( ! $institute_name && ! $logo_url ) {
+            return;
+        }
+
+        $flex_direction = ( 'logo_top' === $layout ) ? 'column' : ( 'logo_right' === $layout ? 'row-reverse' : 'row' );
+        $align_items    = ( 'logo_top' === $layout )
+            ? ( 'center' === $align ? 'center' : ( 'right' === $align ? 'flex-end' : 'flex-start' ) )
+            : 'center';
+        // For row layouts (logo left/right of title), the chosen alignment
+        // moves the whole logo+text group within the available width.
+        $justify_content = ( 'center' === $align ) ? 'center' : ( 'right' === $align ? 'flex-end' : 'flex-start' );
+
+        $wrapper_style = sprintf(
+            'display:flex; flex-direction:%s; align-items:%s; gap:%dpx; flex-wrap:wrap; width:100%%;',
+            esc_attr( $flex_direction ),
+            esc_attr( $align_items ),
+            intval( $logo_gap )
+        );
+
+        if ( 'logo_top' !== $layout ) {
+            $wrapper_style .= ' justify-content:' . esc_attr( $justify_content ) . ';';
+        }
+
+        if ( 'print' === $context ) {
+            $wrapper_style .= ' margin-bottom:30px; border-bottom:2px solid #2563eb; padding-bottom:20px;';
+        } elseif ( 'frontend' === $context ) {
+            $wrapper_style .= ' margin-bottom:18px;';
+        }
+
+        echo '<div class="exam-result-institute-header" style="' . esc_attr( $wrapper_style ) . '">';
+
+        if ( $logo_url ) {
+            printf(
+                '<img src="%s" alt="%s" style="width:%dpx; max-width:100%%; height:auto; flex:0 0 auto; display:block;">',
+                esc_url( $logo_url ),
+                esc_attr( $institute_name ),
+                intval( $logo_width )
+            );
+        }
+
+        if ( $institute_name || $tagline ) {
+            $text_style = sprintf( 'text-align:%s; %s', esc_attr( $align ), ( 'logo_top' === $layout ) ? 'width:100%;' : '' );
+            echo '<div style="' . esc_attr( $text_style ) . '">';
+            if ( $institute_name ) {
+                printf(
+                    '<div class="exam-result-institute-name" style="font-weight:700; color:#0f172a; font-size:%dpx; line-height:1.3;">%s</div>',
+                    intval( $title_size ),
+                    esc_html( $institute_name )
+                );
+            }
+            if ( $tagline ) {
+                printf(
+                    '<div class="exam-result-institute-tagline" style="color:#64748b; font-style:italic; margin-top:4px; font-size:%dpx; line-height:1.3;">%s</div>',
+                    intval( $tagline_size ),
+                    esc_html( $tagline )
+                );
+            }
+            echo '</div>';
+        }
+
+        echo '</div>';
     }
 
     // Admin manager page
@@ -878,30 +1177,9 @@ class ExamResultManager {
                         $total     = get_post_meta( $id, '_student_marks', true );
                         $grade     = get_post_meta( $id, '_student_grade', true );
                         $subjects  = get_post_meta( $id, '_detailed_subjects', true );
-                        $institute_name = get_option( 'exam_institute_name', '' );
-                        $logo_url = get_option( 'exam_institute_logo', '' );
-                        $tagline  = get_option( 'exam_institute_tagline', '' );
-                        $logo_width = get_option( 'exam_logo_width', 120 );
-                        $logo_gap   = get_option( 'exam_logo_title_gap', 20 );
                         ?>
                         <div class="exam-result" id="exam-result-<?php echo intval( $id ); ?>">
-                            <?php if ( $institute_name || $logo_url ) : ?>
-                                <div class="exam-result-institute-header" style="display:flex; align-items:center; gap:<?php echo intval( $logo_gap ); ?>px; margin-bottom:18px;">
-                                    <?php if ( $logo_url ) : ?>
-                                        <img src="<?php echo esc_url( $logo_url ); ?>" alt="<?php echo esc_attr( $institute_name ); ?>" style="width:<?php echo intval( $logo_width ); ?>px; max-width:100%; height:auto; flex:0 0 auto;">
-                                    <?php endif; ?>
-                                    <?php if ( $institute_name || $tagline ) : ?>
-                                        <div>
-                                            <?php if ( $institute_name ) : ?>
-                                                <div class="exam-result-institute-name" style="font-size:1.2rem; font-weight:700; color:var(--text,#0f172a);"><?php echo esc_html( $institute_name ); ?></div>
-                                            <?php endif; ?>
-                                            <?php if ( $tagline ) : ?>
-                                                <div class="exam-result-institute-tagline" style="font-size:0.85rem; color:var(--muted,#64748b); font-style:italic; margin-top:2px;"><?php echo esc_html( $tagline ); ?></div>
-                                            <?php endif; ?>
-                                        </div>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endif; ?>
+                            <?php $this->render_institute_header( 'frontend' ); ?>
                             <h3><?php _e( 'Exam Result', 'exam-result-manager' ); ?></h3>
                             <p><strong><?php _e( 'Name:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $name ); ?></p>
                             <p><strong><?php _e( 'Class:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $class ); ?></p>
@@ -1011,11 +1289,6 @@ class ExamResultManager {
             wp_die();
         }
 
-        $institute_name = get_option( 'exam_institute_name', '' );
-        $logo_url       = get_option( 'exam_institute_logo', '' );
-        $tagline        = get_option( 'exam_institute_tagline', '' );
-        $logo_width     = get_option( 'exam_logo_width', 120 );
-        $logo_gap       = get_option( 'exam_logo_title_gap', 20 );
         $name      = get_post_meta( $post_id, '_student_name', true );
         $class     = get_post_meta( $post_id, '_student_class', true );
         $section   = get_post_meta( $post_id, '_student_section', true );
@@ -1055,41 +1328,6 @@ class ExamResultManager {
                     padding: 30px 25px;
                     background: #fff;
                     box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-                }
-                .marksheet .header {
-                    display: flex;
-                    flex-wrap: wrap;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: <?php echo intval( $logo_gap ); ?>px;
-                    margin-bottom: 30px;
-                    border-bottom: 2px solid #2563eb;
-                    padding-bottom: 20px;
-                }
-                .logo-area {
-                    flex: 0 0 auto;
-                }
-                .logo {
-                    width: <?php echo intval( $logo_width ); ?>px;
-                    max-width: 100%;
-                    height: auto;
-                    display: block;
-                }
-                .title-area {
-                    flex: 1;
-                    text-align: center;
-                }
-                .title {
-                    font-size: 24px;
-                    font-weight: 700;
-                    color: #0f172a;
-                    letter-spacing: 1px;
-                }
-                .tagline {
-                    font-size: 14px;
-                    color: #64748b;
-                    margin-top: 4px;
-                    font-style: italic;
                 }
                 .subtitle {
                     font-size: 16px;
@@ -1164,20 +1402,10 @@ class ExamResultManager {
         </head>
         <body>
         <div class="marksheet">
-            <div class="header">
-                <div class="logo-area">
-                    <?php if ( $logo_url ) : ?>
-                        <img src="<?php echo esc_url( $logo_url ); ?>" class="logo" alt="Institute Logo">
-                    <?php endif; ?>
-                </div>
-                <div class="title-area">
-                    <div class="title"><?php echo esc_html( $institute_name ? $institute_name : __( 'Institute Name', 'exam-result-manager' ) ); ?></div>
-                    <?php if ( ! empty( $tagline ) ) : ?>
-                        <div class="tagline"><?php echo esc_html( $tagline ); ?></div>
-                    <?php endif; ?>
-                    <div class="subtitle"><?php _e( 'Statement of Marks', 'exam-result-manager' ); ?></div>
-                    <div class="subtitle"><?php echo esc_html( $semester ) . ' Semester, ' . esc_html( $year ); ?></div>
-                </div>
+            <?php $this->render_institute_header( 'print' ); ?>
+            <div class="subtitle" style="text-align:center; margin-bottom:20px;">
+                <?php _e( 'Statement of Marks', 'exam-result-manager' ); ?><br>
+                <?php echo esc_html( $semester ) . ' Semester, ' . esc_html( $year ); ?>
             </div>
 
             <div class="student-details">
@@ -1258,7 +1486,12 @@ function exam_result_manager_uninstall() {
     delete_option( 'exam_institute_tagline' );
     delete_option( 'exam_logo_width' );
     delete_option( 'exam_logo_title_gap' );
+    delete_option( 'exam_header_layout' );
+    delete_option( 'exam_header_align' );
+    delete_option( 'exam_title_size' );
+    delete_option( 'exam_tagline_size' );
     delete_option( 'exam_max_internal' );
     delete_option( 'exam_max_external' );
     delete_option( 'exam_max_practical' );
+    delete_option( 'erm_github_update_error' );
 }

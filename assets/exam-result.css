@@ -103,10 +103,6 @@
 }
 
 /* ===== INSTITUTE HEADER (logo + name + tagline) ===== */
-.exam-result-institute-header {
-    flex-wrap: wrap;
-}
-
 .exam-result-institute-header img {
     object-fit: contain;
 }
@@ -120,8 +116,10 @@
 }
 
 @media (max-width: 480px) {
+    /* Cap an oversized configured gap on small screens; otherwise respect
+       the admin's chosen Logo-Title Gap setting (no forced override here). */
     .exam-result-institute-header {
-        gap: 10px !important;
+        max-width: 100%;
     }
 }
 
