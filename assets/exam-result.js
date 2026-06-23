@@ -1,5 +1,5 @@
 jQuery(document).ready(function($) {
-    window.printMarksheet = function(studentId, instituteName, logoUrl) {
+    window.printMarksheet = function(studentId) {
         // Open print window immediately (user gesture) – this avoids popup blockers
         var printWindow = window.open('', '_blank');
         if (!printWindow) {
@@ -15,8 +15,6 @@ jQuery(document).ready(function($) {
         var data = {
             action: 'print_marksheet',
             post_id: studentId,
-            institute_name: instituteName,
-            logo_url: logoUrl,
             nonce: examResultAjax.print_nonce
         };
 

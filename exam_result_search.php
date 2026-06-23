@@ -2,21 +2,21 @@
 /**
  * Plugin Name: Exam Result Manager
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.5.1
+ * Version: 4.6.0
  * Author: Biswajit Thokchom
  * Author URI: https://biswazit.in
  * Text Domain: exam-result-manager
- * GitHub Plugin URI: https://github.com/bungakku/erc
+ * GitHub Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.5.1' );
+define( 'ERM_VERSION', '4.6.0' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
-define( 'ERM_GITHUB_REPO', 'bungakku/erc' );
+define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
 
 /**
  * GitHub Updater – enables auto‑update notifications from GitHub releases.
@@ -451,12 +451,41 @@ class ExamResultManager {
     public function register_settings() {
         register_setting( 'exam_result_settings_group', 'exam_institute_name', 'sanitize_text_field' );
         register_setting( 'exam_result_settings_group', 'exam_institute_logo', 'esc_url_raw' );
+        register_setting( 'exam_result_settings_group', 'exam_institute_tagline', 'sanitize_text_field' );
+        register_setting( 'exam_result_settings_group', 'exam_logo_width', array( $this, 'sanitize_logo_width' ) );
+        register_setting( 'exam_result_settings_group', 'exam_logo_title_gap', array( $this, 'sanitize_logo_gap' ) );
         register_setting( 'exam_result_settings_group', 'exam_max_internal', 'absint' );
         register_setting( 'exam_result_settings_group', 'exam_max_external', 'absint' );
         register_setting( 'exam_result_settings_group', 'exam_max_practical', 'absint' );
     }
 
+    // Keep logo width within a sane, printable range (px)
+    public function sanitize_logo_width( $value ) {
+        $value = absint( $value );
+        if ( $value < 20 ) {
+            $value = 20;
+        }
+        if ( $value > 400 ) {
+            $value = 400;
+        }
+        return $value;
+    }
+
+    // Keep the logo/title gap within a sane range (px)
+    public function sanitize_logo_gap( $value ) {
+        $value = absint( $value );
+        if ( $value > 200 ) {
+            $value = 200;
+        }
+        return $value;
+    }
+
     public function render_settings_page() {
+        $logo_url     = get_option( 'exam_institute_logo', '' );
+        $logo_width   = get_option( 'exam_logo_width', 120 );
+        $logo_gap     = get_option( 'exam_logo_title_gap', 20 );
+        $institute    = get_option( 'exam_institute_name', '' );
+        $tagline      = get_option( 'exam_institute_tagline', '' );
         ?>
         <div class="wrap">
             <h1><?php _e( 'Marksheet Settings', 'exam-result-manager' ); ?></h1>
@@ -465,13 +494,47 @@ class ExamResultManager {
                 <table class="form-table">
                     <tr>
                         <th scope="row"><label for="exam_institute_name"><?php _e( 'Institute Name', 'exam-result-manager' ); ?></label></th>
-                        <td><input type="text" name="exam_institute_name" id="exam_institute_name" value="<?php echo esc_attr( get_option( 'exam_institute_name', '' ) ); ?>" class="regular-text" /></td>
+                        <td><input type="text" name="exam_institute_name" id="exam_institute_name" value="<?php echo esc_attr( $institute ); ?>" class="regular-text" /></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="exam_institute_tagline"><?php _e( 'Tagline (optional)', 'exam-result-manager' ); ?></label></th>
+                        <td>
+                            <input type="text" name="exam_institute_tagline" id="exam_institute_tagline" value="<?php echo esc_attr( $tagline ); ?>" class="regular-text" placeholder="<?php esc_attr_e( 'e.g., Affiliated to State Board of Education', 'exam-result-manager' ); ?>" />
+                            <p class="description"><?php _e( 'A short line shown below the institute name, wherever it appears (search results and printed marksheets). Leave blank to hide it.', 'exam-result-manager' ); ?></p>
+                        </td>
                     </tr>
                     <tr>
                         <th scope="row"><label for="exam_institute_logo"><?php _e( 'Institute Logo (URL)', 'exam-result-manager' ); ?></label></th>
                         <td>
-                            <input type="text" name="exam_institute_logo" id="exam_institute_logo" value="<?php echo esc_attr( get_option( 'exam_institute_logo', '' ) ); ?>" class="regular-text" />
+                            <input type="text" name="exam_institute_logo" id="exam_institute_logo" value="<?php echo esc_attr( $logo_url ); ?>" class="regular-text" />
                             <button type="button" class="button" id="upload_logo_button"><?php _e( 'Upload Logo', 'exam-result-manager' ); ?></button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="exam_logo_width"><?php _e( 'Logo Width', 'exam-result-manager' ); ?></label></th>
+                        <td>
+                            <input type="number" name="exam_logo_width" id="exam_logo_width" value="<?php echo esc_attr( $logo_width ); ?>" min="20" max="400" step="1" style="width:90px;"> px
+                            <p class="description"><?php _e( 'Logo display width in pixels (20-400). Height scales automatically to keep the logo proportional.', 'exam-result-manager' ); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="exam_logo_title_gap"><?php _e( 'Logo &ndash; Title Gap', 'exam-result-manager' ); ?></label></th>
+                        <td>
+                            <input type="number" name="exam_logo_title_gap" id="exam_logo_title_gap" value="<?php echo esc_attr( $logo_gap ); ?>" min="0" max="200" step="1" style="width:90px;"> px
+                            <p class="description"><?php _e( 'Horizontal spacing between the logo and the institute name/tagline block.', 'exam-result-manager' ); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php _e( 'Header Preview', 'exam-result-manager' ); ?></th>
+                        <td>
+                            <div id="erm-header-preview" style="display:flex; align-items:center; border:1px solid #ddd; background:#fff; padding:16px; max-width:600px; gap:<?php echo esc_attr( $logo_gap ); ?>px;">
+                                <img id="erm-preview-logo" src="<?php echo esc_url( $logo_url ); ?>" style="width:<?php echo esc_attr( $logo_width ); ?>px; height:auto; display:<?php echo $logo_url ? 'block' : 'none'; ?>;" alt="">
+                                <div>
+                                    <div id="erm-preview-name" style="font-size:20px; font-weight:700; color:#0f172a;"><?php echo esc_html( $institute ? $institute : __( 'Institute Name', 'exam-result-manager' ) ); ?></div>
+                                    <div id="erm-preview-tagline" style="font-size:13px; color:#64748b; margin-top:4px; <?php echo $tagline ? '' : 'display:none;'; ?>"><?php echo esc_html( $tagline ); ?></div>
+                                </div>
+                            </div>
+                            <p class="description"><?php _e( 'This preview updates live as you edit the fields above (save to apply on the site).', 'exam-result-manager' ); ?></p>
                         </td>
                     </tr>
                     <tr>
@@ -502,8 +565,34 @@ class ExamResultManager {
                 custom_uploader.on('select', function() {
                     var attachment = custom_uploader.state().get('selection').first().toJSON();
                     $('#exam_institute_logo').val(attachment.url);
+                    $('#erm-preview-logo').attr('src', attachment.url).show();
                 });
                 custom_uploader.open();
+            });
+
+            // Live preview wiring
+            $('#exam_institute_logo').on('input', function() {
+                var url = $(this).val();
+                if (url) {
+                    $('#erm-preview-logo').attr('src', url).show();
+                } else {
+                    $('#erm-preview-logo').hide();
+                }
+            });
+            $('#exam_logo_width').on('input', function() {
+                var w = parseInt($(this).val(), 10) || 0;
+                $('#erm-preview-logo').css('width', w + 'px');
+            });
+            $('#exam_logo_title_gap').on('input', function() {
+                var g = parseInt($(this).val(), 10) || 0;
+                $('#erm-header-preview').css('gap', g + 'px');
+            });
+            $('#exam_institute_name').on('input', function() {
+                $('#erm-preview-name').text($(this).val() || '<?php echo esc_js( __( 'Institute Name', 'exam-result-manager' ) ); ?>');
+            });
+            $('#exam_institute_tagline').on('input', function() {
+                var t = $(this).val();
+                $('#erm-preview-tagline').text(t).toggle(!!t);
             });
         });
         </script>
@@ -791,8 +880,28 @@ class ExamResultManager {
                         $subjects  = get_post_meta( $id, '_detailed_subjects', true );
                         $institute_name = get_option( 'exam_institute_name', '' );
                         $logo_url = get_option( 'exam_institute_logo', '' );
+                        $tagline  = get_option( 'exam_institute_tagline', '' );
+                        $logo_width = get_option( 'exam_logo_width', 120 );
+                        $logo_gap   = get_option( 'exam_logo_title_gap', 20 );
                         ?>
-                        <div class="exam-result" id="exam-result-<?php echo $id; ?>">
+                        <div class="exam-result" id="exam-result-<?php echo intval( $id ); ?>">
+                            <?php if ( $institute_name || $logo_url ) : ?>
+                                <div class="exam-result-institute-header" style="display:flex; align-items:center; gap:<?php echo intval( $logo_gap ); ?>px; margin-bottom:18px;">
+                                    <?php if ( $logo_url ) : ?>
+                                        <img src="<?php echo esc_url( $logo_url ); ?>" alt="<?php echo esc_attr( $institute_name ); ?>" style="width:<?php echo intval( $logo_width ); ?>px; max-width:100%; height:auto; flex:0 0 auto;">
+                                    <?php endif; ?>
+                                    <?php if ( $institute_name || $tagline ) : ?>
+                                        <div>
+                                            <?php if ( $institute_name ) : ?>
+                                                <div class="exam-result-institute-name" style="font-size:1.2rem; font-weight:700; color:var(--text,#0f172a);"><?php echo esc_html( $institute_name ); ?></div>
+                                            <?php endif; ?>
+                                            <?php if ( $tagline ) : ?>
+                                                <div class="exam-result-institute-tagline" style="font-size:0.85rem; color:var(--muted,#64748b); font-style:italic; margin-top:2px;"><?php echo esc_html( $tagline ); ?></div>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endif; ?>
                             <h3><?php _e( 'Exam Result', 'exam-result-manager' ); ?></h3>
                             <p><strong><?php _e( 'Name:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $name ); ?></p>
                             <p><strong><?php _e( 'Class:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $class ); ?></p>
@@ -842,7 +951,7 @@ class ExamResultManager {
                             <p><strong><?php _e( 'Overall Total:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $total ); ?></p>
                             <p><strong><?php _e( 'Overall Grade:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $grade ); ?></p>
 
-                            <button class="print-button" onclick="printMarksheet(<?php echo $id; ?>, '<?php echo esc_js( $institute_name ); ?>', '<?php echo esc_js( $logo_url ); ?>')"><?php _e( 'Print Marksheet', 'exam-result-manager' ); ?></button>
+                            <button class="print-button" onclick="printMarksheet(<?php echo intval( $id ); ?>)"><?php _e( 'Print Marksheet', 'exam-result-manager' ); ?></button>
                         </div>
                         <?php
                     endwhile;
@@ -902,8 +1011,11 @@ class ExamResultManager {
             wp_die();
         }
 
-        $institute_name = sanitize_text_field( $_POST['institute_name'] );
-        $logo_url = esc_url_raw( $_POST['logo_url'] );
+        $institute_name = get_option( 'exam_institute_name', '' );
+        $logo_url       = get_option( 'exam_institute_logo', '' );
+        $tagline        = get_option( 'exam_institute_tagline', '' );
+        $logo_width     = get_option( 'exam_logo_width', 120 );
+        $logo_gap       = get_option( 'exam_logo_title_gap', 20 );
         $name      = get_post_meta( $post_id, '_student_name', true );
         $class     = get_post_meta( $post_id, '_student_class', true );
         $section   = get_post_meta( $post_id, '_student_section', true );
@@ -949,7 +1061,7 @@ class ExamResultManager {
                     flex-wrap: wrap;
                     align-items: center;
                     justify-content: space-between;
-                    gap: 20px;
+                    gap: <?php echo intval( $logo_gap ); ?>px;
                     margin-bottom: 30px;
                     border-bottom: 2px solid #2563eb;
                     padding-bottom: 20px;
@@ -958,7 +1070,8 @@ class ExamResultManager {
                     flex: 0 0 auto;
                 }
                 .logo {
-                    max-width: 120px;
+                    width: <?php echo intval( $logo_width ); ?>px;
+                    max-width: 100%;
                     height: auto;
                     display: block;
                 }
@@ -971,6 +1084,12 @@ class ExamResultManager {
                     font-weight: 700;
                     color: #0f172a;
                     letter-spacing: 1px;
+                }
+                .tagline {
+                    font-size: 14px;
+                    color: #64748b;
+                    margin-top: 4px;
+                    font-style: italic;
                 }
                 .subtitle {
                     font-size: 16px;
@@ -1053,6 +1172,9 @@ class ExamResultManager {
                 </div>
                 <div class="title-area">
                     <div class="title"><?php echo esc_html( $institute_name ? $institute_name : __( 'Institute Name', 'exam-result-manager' ) ); ?></div>
+                    <?php if ( ! empty( $tagline ) ) : ?>
+                        <div class="tagline"><?php echo esc_html( $tagline ); ?></div>
+                    <?php endif; ?>
                     <div class="subtitle"><?php _e( 'Statement of Marks', 'exam-result-manager' ); ?></div>
                     <div class="subtitle"><?php echo esc_html( $semester ) . ' Semester, ' . esc_html( $year ); ?></div>
                 </div>
@@ -1133,6 +1255,9 @@ function exam_result_manager_uninstall() {
     }
     delete_option( 'exam_institute_name' );
     delete_option( 'exam_institute_logo' );
+    delete_option( 'exam_institute_tagline' );
+    delete_option( 'exam_logo_width' );
+    delete_option( 'exam_logo_title_gap' );
     delete_option( 'exam_max_internal' );
     delete_option( 'exam_max_external' );
     delete_option( 'exam_max_practical' );
