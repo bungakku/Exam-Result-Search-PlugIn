@@ -1,6 +1,6 @@
 # Exam Result Manager
 
-**Contributors:** bungakku  
+**Contributors:** Biswajit  
 **Tags:** exam, result, marks, student, marksheet, print, CSV import, GitHub updater  
 **Requires at least:** 5.0  
 **Tested up to:** 6.4  
