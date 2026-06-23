@@ -1,0 +1,195 @@
+:root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --accent: #0ea5e9;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --text: #0f172a;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --success: #16a34a;
+    --danger: #dc2626;
+}
+
+/* No rounded corners anywhere */
+.exam-result-search-container,
+.exam-result-search-form,
+.exam-result-search-form input[type="text"],
+.exam-result-search-form select,
+.exam-result-search-form input[type="submit"],
+.exam-result,
+.print-button,
+.exam-result-not-found {
+    border-radius: 0 !important;
+}
+
+/* Main container */
+.exam-result-search-container {
+    max-width: 1100px;
+    margin: 32px auto;
+    padding: 24px;
+    background: linear-gradient(135deg, #eff6ff, #f8fafc);
+    border: 1px solid var(--border);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+}
+
+/* Search form card */
+.exam-result-search-form {
+    background: var(--card);
+    padding: 22px;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.08);
+}
+
+/* Desktop: even smaller and shorter input fields */
+.exam-result-search-form p {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin: 0;
+}
+
+.exam-result-search-form .form-group {
+    flex: 0 1 110px;     /* prevent growing, max width ~110px */
+    min-width: 100px;    /* but not too small */
+}
+
+.exam-result-search-form label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 700;
+    color: var(--text);
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.exam-result-search-form input[type="text"],
+.exam-result-search-form select {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    background: #fff;
+    font-size: 0.8rem;
+    box-sizing: border-box;
+}
+
+.exam-result-search-form input[type="submit"],
+.print-button {
+    padding: 6px 14px;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+    transition: transform 0.1s ease;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+/* ================= RESULT CARD ================= */
+.exam-result {
+    margin: 24px 0;
+    padding: 20px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    overflow-x: auto;
+}
+
+.exam-result h3 {
+    margin: 0 0 15px;
+    color: var(--primary);
+    font-size: 1.4rem;
+}
+
+.exam-result p {
+    margin: 0.4rem 0;
+    line-height: 1.4;
+}
+
+/* ===== CRITICAL: TABLE RESPONSIVENESS ===== */
+.exam-result .table-responsive {
+    overflow-x: auto;
+    width: 100%;
+    margin: 15px 0;
+}
+
+.exam-result table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 550px;
+}
+
+.exam-result th,
+.exam-result td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.exam-result th {
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    color: #fff;
+}
+
+@media (max-width: 480px) {
+    .exam-result th,
+    .exam-result td {
+        white-space: normal;
+        word-break: break-word;
+    }
+    .exam-result table {
+        min-width: auto;
+    }
+}
+
+.required-field::after {
+    content: " *";
+    color: var(--danger);
+}
+
+/* ===== MOBILE & TABLET ===== */
+@media (max-width: 768px) {
+    .exam-result-search-form p {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+    .exam-result-search-form .form-group {
+        flex: auto;
+        min-width: auto;
+    }
+    .exam-result-search-form .form-group:last-child {
+        grid-column: span 2;
+    }
+    .exam-result {
+        padding: 15px;
+    }
+    .exam-result-search-container {
+        padding: 16px;
+    }
+    .exam-result-search-form {
+        padding: 16px;
+    }
+    .exam-result h3 {
+        margin-bottom: 10px;
+    }
+    .exam-result-search-form label {
+        white-space: normal;
+    }
+}
+
+@media (max-width: 480px) {
+    .exam-result-search-form p {
+        grid-template-columns: 1fr;
+    }
+    .exam-result-search-form .form-group:last-child {
+        grid-column: span 1;
+    }
+    .print-button {
+        width: 100%;
+        text-align: center;
+        margin-top: 8px;
+    }
+}
