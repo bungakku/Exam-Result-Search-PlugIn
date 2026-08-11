@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.6
+ * Version: 4.7.7
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
  * Text Domain: exam-result-manager
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.6' );
+define( 'ERM_VERSION', '4.7.7' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -43,6 +43,7 @@ class ERM_GitHub_Updater {
         add_action( 'admin_notices', array( $this, 'maybe_show_error_notice' ) );
         add_filter( 'plugin_action_links_' . $this->plugin_slug, array( $this, 'add_check_update_link' ) );
         add_action( 'admin_init', array( $this, 'maybe_handle_manual_check' ) );
+        add_filter( 'upgrader_source_selection', array( $this, 'fix_source_folder_name' ), 10, 4 );
     }
 
     /**
@@ -91,6 +92,42 @@ class ERM_GitHub_Updater {
         }
 
         return $transient;
+    }
+
+    /**
+     * GitHub's auto-generated release zipball always extracts to a folder
+     * named "{owner}-{repo}-{commit-hash}" (e.g. "bungakku-Exam-Result-Search-
+     * PlugIn-101684e"), never the plugin's actual installed folder name.
+     * Left alone, WordPress installs the update under that mismatched name;
+     * the file path it had recorded as "active" no longer exists afterward,
+     * so the plugin silently shows as deactivated until manually re-enabled
+     * -- on every single update. Renaming the extracted source to match the
+     * real slug, before WP moves it into wp-content/plugins/, keeps the path
+     * (and therefore the active/activated state) stable across updates.
+     */
+    public function fix_source_folder_name( $source, $remote_source, $upgrader, $hook_extra = array() ) {
+        global $wp_filesystem;
+
+        // Only touch our own plugin's update, never anyone else's.
+        if ( empty( $hook_extra['plugin'] ) || $hook_extra['plugin'] !== $this->plugin_slug ) {
+            return $source;
+        }
+
+        if ( ! $wp_filesystem || ! is_string( $source ) ) {
+            return $source;
+        }
+
+        $corrected_source = trailingslashit( $remote_source ) . $this->slug . '/';
+
+        if ( trailingslashit( $source ) === $corrected_source ) {
+            return $source; // Already correctly named.
+        }
+
+        if ( $wp_filesystem->move( $source, $corrected_source, true ) ) {
+            return $corrected_source;
+        }
+
+        return $source;
     }
 
     private function get_latest_release() {
