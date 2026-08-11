@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.5
+ * Version: 4.7.6
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
  * Text Domain: exam-result-manager
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.5' );
+define( 'ERM_VERSION', '4.7.6' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -469,19 +469,19 @@ class ExamResultManager {
 
         $detailed_subjects = array();
         if ( isset( $_POST['subject_code'] ) && is_array( $_POST['subject_code'] ) ) {
-            $codes = $_POST['subject_code'];
-            $names = $_POST['subject_name'];
-            $internals = $_POST['subject_internal'];
-            $externals = $_POST['subject_external'];
-            $practicals = $_POST['subject_practical'];
+            $codes      = $_POST['subject_code'];
+            $names      = isset( $_POST['subject_name'] ) && is_array( $_POST['subject_name'] ) ? $_POST['subject_name'] : array();
+            $internals  = isset( $_POST['subject_internal'] ) && is_array( $_POST['subject_internal'] ) ? $_POST['subject_internal'] : array();
+            $externals  = isset( $_POST['subject_external'] ) && is_array( $_POST['subject_external'] ) ? $_POST['subject_external'] : array();
+            $practicals = isset( $_POST['subject_practical'] ) && is_array( $_POST['subject_practical'] ) ? $_POST['subject_practical'] : array();
             for ( $i = 0; $i < count( $codes ); $i++ ) {
                 if ( ! empty( $names[ $i ] ) ) {
                     $detailed_subjects[] = array(
-                        'code'      => sanitize_text_field( $codes[ $i ] ),
+                        'code'      => isset( $codes[ $i ] ) ? sanitize_text_field( $codes[ $i ] ) : '',
                         'name'      => sanitize_text_field( $names[ $i ] ),
-                        'internal'  => floatval( $internals[ $i ] ),
-                        'external'  => floatval( $externals[ $i ] ),
-                        'practical' => floatval( $practicals[ $i ] ),
+                        'internal'  => isset( $internals[ $i ] ) ? floatval( $internals[ $i ] ) : 0,
+                        'external'  => isset( $externals[ $i ] ) ? floatval( $externals[ $i ] ) : 0,
+                        'practical' => isset( $practicals[ $i ] ) ? floatval( $practicals[ $i ] ) : 0,
                     );
                 }
             }
