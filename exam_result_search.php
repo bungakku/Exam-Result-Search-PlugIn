@@ -1,10 +1,11 @@
 <?php
 /**
  * Plugin Name: Exam Result Manager
+ * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.2
+ * Version: 4.7.3
  * Author: Biswajit Thokchom
- * Author URI: https://biswazit.in
+ * Author URI: https://github.com/bungakku
  * Text Domain: exam-result-manager
  * GitHub Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  */
@@ -13,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.2' );
+define( 'ERM_VERSION', '4.7.3' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -144,7 +145,7 @@ class ERM_GitHub_Updater {
             'slug'          => $this->slug,
             'version'       => ltrim( $release->tag_name, 'v' ),
             'author'        => 'Biswajit Thokchom',
-            'author_profile' => 'https://biswazit.in',
+            'author_profile' => 'https://github.com/bungakku',
             'last_updated'  => $release->published_at,
             'homepage'      => 'https://github.com/' . $this->github_repo,
             'download_link' => $release->zipball_url,
