@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.4
+ * Version: 4.7.5
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
  * Text Domain: exam-result-manager
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.4' );
+define( 'ERM_VERSION', '4.7.5' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -1286,6 +1286,13 @@ class ExamResultManager {
 
         $post_id = intval( $_POST['post_id'] );
         if ( ! $post_id || get_post_type( $post_id ) !== 'exam_result' ) {
+            echo '<p>' . __( 'Invalid result.', 'exam-result-manager' ) . '</p>';
+            wp_die();
+        }
+        if ( 'publish' !== get_post_status( $post_id ) ) {
+            // Matches the search shortcode's implicit publish-only scope —
+            // draft/unpublished results shouldn't be printable by guessing an
+            // ID, even though this endpoint is intentionally public otherwise.
             echo '<p>' . __( 'Invalid result.', 'exam-result-manager' ) . '</p>';
             wp_die();
         }
