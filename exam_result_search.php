@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Exam Result Manager
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.0
+ * Version: 4.7.2
  * Author: Biswajit Thokchom
  * Author URI: https://biswazit.in
  * Text Domain: exam-result-manager
@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.0' );
+define( 'ERM_VERSION', '4.7.2' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -1298,10 +1298,19 @@ class ExamResultManager {
         $total     = get_post_meta( $post_id, '_student_marks', true );
         $grade     = get_post_meta( $post_id, '_student_grade', true );
         $subjects  = get_post_meta( $post_id, '_detailed_subjects', true );
+        if ( ! is_array( $subjects ) ) {
+            // Legacy "_subject_marks"-only results (or otherwise missing
+            // _detailed_subjects) return '' here. On PHP 8+, count('') on a
+            // non-array is a fatal TypeError, so this must degrade to an
+            // empty result set instead of crashing the print request.
+            $subjects = array();
+        }
         $max_internal = get_option( 'exam_max_internal', 10 );
         $max_external = get_option( 'exam_max_external', 70 );
         $max_practical = get_option( 'exam_max_practical', 20 );
         $max_total = $max_internal + $max_external + $max_practical;
+        $max_overall = count( $subjects ) * $max_total;
+        $overall_percentage = $max_overall > 0 ? round( ( $total / $max_overall ) * 100, 2 ) : 0;
 
         ?>
         <!DOCTYPE html>
@@ -1446,8 +1455,8 @@ class ExamResultManager {
             </table>
 
             <div class="total-grade">
-                <p><strong><?php _e( 'Overall Total:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $total ); ?> / <?php echo count( $subjects ) * $max_total; ?></p>
-                <p><strong><?php _e( 'Percentage:', 'exam-result-manager' ); ?></strong> <?php echo round( ( $total / ( count( $subjects ) * $max_total ) ) * 100, 2 ); ?>%</p>
+                <p><strong><?php _e( 'Overall Total:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $total ); ?> / <?php echo esc_html( $max_overall ); ?></p>
+                <p><strong><?php _e( 'Percentage:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $overall_percentage ); ?>%</p>
                 <p><strong><?php _e( 'Overall Grade:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $grade ); ?></p>
             </div>
 
