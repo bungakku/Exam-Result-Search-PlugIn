@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.11
+ * Version: 4.7.12
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
  * Text Domain: exam-result-manager
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.11' );
+define( 'ERM_VERSION', '4.7.12' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -273,6 +273,7 @@ class ExamResultManager {
         add_action( 'wp_ajax_print_marksheet', array( $this, 'ajax_print_marksheet' ) );
         add_action( 'wp_ajax_nopriv_print_marksheet', array( $this, 'ajax_print_marksheet' ) );
         add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_scripts' ) );
+        add_action( 'admin_init', array( $this, 'maybe_migrate_lookup_keys' ) );
         load_plugin_textdomain( 'exam-result-manager', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
     }
 
@@ -504,6 +505,18 @@ class ExamResultManager {
             }
         }
 
+        // Composite lookup key: lets the public search match Roll No + Class
+        // + Semester + Year with a single meta_query clause instead of four
+        // separate ones (each a wp_postmeta JOIN). Purely additive -- the
+        // individual _student_rollno/_student_class/etc. meta fields above
+        // are unchanged and remain the source of truth.
+        update_post_meta( $post_id, '_erm_lookup_key', $this->build_lookup_key(
+            get_post_meta( $post_id, '_student_rollno', true ),
+            get_post_meta( $post_id, '_student_class', true ),
+            get_post_meta( $post_id, '_student_semester', true ),
+            get_post_meta( $post_id, '_exam_year', true )
+        ) );
+
         $detailed_subjects = array();
         if ( isset( $_POST['subject_code'] ) && is_array( $_POST['subject_code'] ) ) {
             $codes      = $_POST['subject_code'];
@@ -563,6 +576,70 @@ class ExamResultManager {
         if ( $percentage >= 50 ) return 'C';
         if ( $percentage >= 40 ) return 'D';
         return 'F';
+    }
+
+    /**
+     * Builds the composite value stored in _erm_lookup_key (Roll No + Class +
+     * Semester + Year), used so the public search can match with a single
+     * meta_query clause. Normalized (trimmed, lowercased) so the fast path
+     * matches case-insensitively, the same as the original per-field '='
+     * meta_query comparisons did under MySQL's default (case-insensitive)
+     * collation -- keeps search behavior identical to before this change.
+     */
+    private function build_lookup_key( $rollno, $class, $semester, $year ) {
+        $parts = array( $rollno, $class, $semester, $year );
+        foreach ( $parts as &$part ) {
+            $part = trim( (string) $part );
+            $part = function_exists( 'mb_strtolower' ) ? mb_strtolower( $part, 'UTF-8' ) : strtolower( $part );
+        }
+        unset( $part );
+        return implode( '|', $parts );
+    }
+
+    /**
+     * One-time backfill of _erm_lookup_key for exam_result posts saved
+     * before this field existed, so the faster composite-key search doesn't
+     * miss older results. Batched (200/pass) to avoid timing out on large
+     * sites, and re-runs on the next admin page load if a batch remains;
+     * the search's own fallback query also opportunistically backfills, so
+     * this is a completeness/performance measure, not a correctness
+     * requirement -- older results are never actually inaccessible.
+     */
+    public function maybe_migrate_lookup_keys() {
+        if ( get_option( 'erm_lookup_key_migrated' ) ) {
+            return;
+        }
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+
+        $batch = get_posts( array(
+            'post_type'      => 'exam_result',
+            'post_status'    => 'any',
+            'posts_per_page' => 200,
+            'fields'         => 'ids',
+            'meta_query'     => array(
+                array( 'key' => '_erm_lookup_key', 'compare' => 'NOT EXISTS' ),
+            ),
+        ) );
+
+        if ( empty( $batch ) ) {
+            update_option( 'erm_lookup_key_migrated', 1 );
+            return;
+        }
+
+        foreach ( $batch as $post_id ) {
+            update_post_meta( $post_id, '_erm_lookup_key', $this->build_lookup_key(
+                get_post_meta( $post_id, '_student_rollno', true ),
+                get_post_meta( $post_id, '_student_class', true ),
+                get_post_meta( $post_id, '_student_semester', true ),
+                get_post_meta( $post_id, '_exam_year', true )
+            ) );
+        }
+
+        if ( count( $batch ) < 200 ) {
+            update_option( 'erm_lookup_key_migrated', 1 );
+        }
     }
 
     /**
@@ -1178,6 +1255,7 @@ class ExamResultManager {
                 update_post_meta( $post_id, '_student_section',  $section );
                 update_post_meta( $post_id, '_student_semester', $semester );
                 update_post_meta( $post_id, '_exam_year',        $year );
+                update_post_meta( $post_id, '_erm_lookup_key', $this->build_lookup_key( $rollno, $class, $semester, $year ) );
                 update_post_meta( $post_id, '_detailed_subjects', $detailed_subjects );
                 $max_overall = count( $detailed_subjects ) * $max_per_subject;
                 $percentage = $max_overall > 0 ? ( $overall_total / $max_overall ) * 100 : 0;
@@ -1235,11 +1313,9 @@ class ExamResultManager {
             if ( $search_rate_limited ) {
                 echo '<div class="exam-result-not-found"><p>' . __( 'Too many search attempts. Please wait a few minutes and try again.', 'exam-result-manager' ) . '</p></div>';
             } elseif ( $search_roll && $search_class && $search_sem && $search_year ) {
+                $lookup_key = $this->build_lookup_key( $search_roll, $search_class, $search_sem, $search_year );
                 $meta_query = array( 'relation' => 'AND' );
-                $meta_query[] = array( 'key' => '_student_rollno',   'value' => $search_roll,   'compare' => '=' );
-                $meta_query[] = array( 'key' => '_student_class',    'value' => $search_class,  'compare' => '=' );
-                $meta_query[] = array( 'key' => '_student_semester', 'value' => $search_sem,    'compare' => '=' );
-                $meta_query[] = array( 'key' => '_exam_year',        'value' => $search_year,   'compare' => '=' );
+                $meta_query[] = array( 'key' => '_erm_lookup_key', 'value' => $lookup_key, 'compare' => '=' );
                 if ( ! empty( $search_section ) ) {
                     $meta_query[] = array( 'key' => '_student_section', 'value' => $search_section, 'compare' => '=' );
                 }
@@ -1249,6 +1325,34 @@ class ExamResultManager {
                     'posts_per_page' => 10,
                     'meta_query'     => $meta_query,
                 ) );
+
+                // Safety net: a result saved before this composite-key index
+                // existed (and not yet backfilled) would otherwise appear to
+                // not exist. Only runs the slower, original per-field lookup
+                // when the fast path finds nothing, so normal (already-
+                // indexed) searches stay on the fast, single-clause path.
+                if ( ! $query->have_posts() ) {
+                    $fallback_meta_query = array( 'relation' => 'AND' );
+                    $fallback_meta_query[] = array( 'key' => '_student_rollno',   'value' => $search_roll,   'compare' => '=' );
+                    $fallback_meta_query[] = array( 'key' => '_student_class',    'value' => $search_class,  'compare' => '=' );
+                    $fallback_meta_query[] = array( 'key' => '_student_semester', 'value' => $search_sem,    'compare' => '=' );
+                    $fallback_meta_query[] = array( 'key' => '_exam_year',        'value' => $search_year,   'compare' => '=' );
+                    if ( ! empty( $search_section ) ) {
+                        $fallback_meta_query[] = array( 'key' => '_student_section', 'value' => $search_section, 'compare' => '=' );
+                    }
+                    $query = new WP_Query( array(
+                        'post_type'      => 'exam_result',
+                        'posts_per_page' => 10,
+                        'meta_query'     => $fallback_meta_query,
+                    ) );
+                    // Opportunistically backfill, so the next search for the
+                    // same result uses the fast path.
+                    if ( ! empty( $query->posts ) ) {
+                        foreach ( $query->posts as $found_post ) {
+                            update_post_meta( $found_post->ID, '_erm_lookup_key', $lookup_key );
+                        }
+                    }
+                }
 
                 if ( $query->have_posts() ) {
                     while ( $query->have_posts() ) : $query->the_post();
@@ -1600,4 +1704,5 @@ function exam_result_manager_uninstall() {
     delete_option( 'exam_max_external' );
     delete_option( 'exam_max_practical' );
     delete_option( 'erm_github_update_error' );
+    delete_option( 'erm_lookup_key_migrated' );
 }
