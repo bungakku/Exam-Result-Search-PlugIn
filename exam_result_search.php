@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.7
+ * Version: 4.7.8
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
  * Text Domain: exam-result-manager
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.7' );
+define( 'ERM_VERSION', '4.7.8' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -545,7 +545,12 @@ class ExamResultManager {
         if ( ! empty( $post ) && empty( $post->post_title ) && isset( $_POST['student_name'] ) ) {
             $title = sanitize_text_field( $_POST['student_name'] );
             if ( ! empty( $title ) ) {
+                // wp_update_post() re-fires 'save_post', which would run this
+                // whole method a second time (redundant meta writes). Unhook
+                // for the duration of the title update, standard WP pattern.
+                remove_action( 'save_post', array( $this, 'save_result_data' ), 10 );
                 wp_update_post( array( 'ID' => $post_id, 'post_title' => $title ) );
+                add_action( 'save_post', array( $this, 'save_result_data' ), 10, 2 );
             }
         }
     }
