@@ -23,7 +23,19 @@ jQuery(document).ready(function($) {
             printWindow.document.open();
             printWindow.document.write(response);
             printWindow.document.close();
-            printWindow.print();
+
+            // Wait for the marksheet document -- including the institute
+            // logo <img> -- to fully load before opening the print dialog,
+            // so the logo isn't missing/blank in the printout.
+            function triggerPrint() {
+                printWindow.focus();
+                printWindow.print();
+            }
+            if (printWindow.document.readyState === 'complete') {
+                triggerPrint();
+            } else {
+                printWindow.onload = triggerPrint;
+            }
         }).fail(function() {
             printWindow.document.open();
             printWindow.document.write('<html><head><title>Error</title></head><body><p>Failed to load marksheet. Please try again.</p></body></html>');
