@@ -19,23 +19,25 @@ jQuery(document).ready(function($) {
         };
 
         $.post(examResultAjax.ajaxurl, data, function(response) {
-            // Replace content with actual marksheet
-            printWindow.document.open();
-            printWindow.document.write(response);
-            printWindow.document.close();
+            // Load the marksheet via a real navigation (a Blob URL) instead of
+            // document.write(). Two reasons:
+            // 1) document.write()'d content can report readyState "complete"
+            //    before its own <img> tags (the institute logo) have actually
+            //    finished loading, so print() could still fire too early.
+            //    A genuine navigation gives a "load" event that correctly
+            //    waits for images.
+            // 2) The window never leaves "about:blank" with document.write(),
+            //    which is what shows up as "about:blank" in the browser's own
+            //    printed header/footer. A real (blob:) URL replaces that.
+            var blob = new Blob( [ response ], { type: 'text/html' } );
+            var blobUrl = URL.createObjectURL( blob );
 
-            // Wait for the marksheet document -- including the institute
-            // logo <img> -- to fully load before opening the print dialog,
-            // so the logo isn't missing/blank in the printout.
-            function triggerPrint() {
+            printWindow.onload = function() {
                 printWindow.focus();
                 printWindow.print();
-            }
-            if (printWindow.document.readyState === 'complete') {
-                triggerPrint();
-            } else {
-                printWindow.onload = triggerPrint;
-            }
+                URL.revokeObjectURL( blobUrl );
+            };
+            printWindow.location.href = blobUrl;
         }).fail(function() {
             printWindow.document.open();
             printWindow.document.write('<html><head><title>Error</title></head><body><p>Failed to load marksheet. Please try again.</p></body></html>');
