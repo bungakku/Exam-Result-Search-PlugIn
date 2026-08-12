@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.9
+ * Version: 4.7.10
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
  * Text Domain: exam-result-manager
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.9' );
+define( 'ERM_VERSION', '4.7.10' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -563,6 +563,44 @@ class ExamResultManager {
         if ( $percentage >= 50 ) return 'C';
         if ( $percentage >= 40 ) return 'D';
         return 'F';
+    }
+
+    /**
+     * Lightweight per-IP throttle for the public search and print endpoints,
+     * which have no login/capability gate by design. Roll No/Class/Semester/
+     * Year (or a post ID) is the only "secret" involved, so without this a
+     * script could enumerate every student's name, marks, and grade.
+     *
+     * Uses REMOTE_ADDR only (not X-Forwarded-For, which a client can spoof
+     * unless the host's proxy is explicitly configured to sanitize it) --
+     * behind a CDN/reverse proxy this may under-distinguish visitors sharing
+     * an edge IP, which is an acceptable trade-off for this soft throttle.
+     *
+     * @param string $action  Distinguishes search vs. print counters.
+     * @param int    $limit   Max attempts allowed within the window.
+     * @param int    $window  Window length in seconds.
+     * @return bool True if this IP has exceeded the limit and should be blocked.
+     */
+    private function is_rate_limited( $action, $limit = 15, $window = 600 ) {
+        $ip = isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : '';
+        if ( empty( $ip ) ) {
+            return false; // Can't identify the requester; don't block.
+        }
+
+        $key   = 'erm_rl_' . $action . '_' . md5( $ip );
+        $count = get_transient( $key );
+
+        if ( false === $count ) {
+            set_transient( $key, 1, $window );
+            return false;
+        }
+
+        if ( (int) $count >= $limit ) {
+            return true;
+        }
+
+        set_transient( $key, (int) $count + 1, $window );
+        return false;
     }
 
     // Admin settings page
@@ -1192,7 +1230,11 @@ class ExamResultManager {
             $search_year   = isset( $_POST['search_year'] ) ? sanitize_text_field( $_POST['search_year'] ) : '';
             $search_section = isset( $_POST['search_section'] ) ? sanitize_text_field( $_POST['search_section'] ) : '';
 
-            if ( $search_roll && $search_class && $search_sem && $search_year ) {
+            $search_rate_limited = ( $search_roll && $search_class && $search_sem && $search_year ) ? $this->is_rate_limited( 'search' ) : false;
+
+            if ( $search_rate_limited ) {
+                echo '<div class="exam-result-not-found"><p>' . __( 'Too many search attempts. Please wait a few minutes and try again.', 'exam-result-manager' ) . '</p></div>';
+            } elseif ( $search_roll && $search_class && $search_sem && $search_year ) {
                 $meta_query = array( 'relation' => 'AND' );
                 $meta_query[] = array( 'key' => '_student_rollno',   'value' => $search_roll,   'compare' => '=' );
                 $meta_query[] = array( 'key' => '_student_class',    'value' => $search_class,  'compare' => '=' );
@@ -1324,6 +1366,11 @@ class ExamResultManager {
         // Verify nonce
         if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'print_marksheet_nonce' ) ) {
             wp_die( __( 'Security check failed.', 'exam-result-manager' ) );
+        }
+
+        if ( $this->is_rate_limited( 'print' ) ) {
+            echo '<p>' . __( 'Too many requests. Please wait a few minutes and try again.', 'exam-result-manager' ) . '</p>';
+            wp_die();
         }
 
         $post_id = intval( $_POST['post_id'] );
