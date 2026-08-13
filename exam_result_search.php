@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.12
+ * Version: 4.7.13
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
  * Text Domain: exam-result-manager
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.12' );
+define( 'ERM_VERSION', '4.7.13' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -1088,6 +1088,7 @@ class ExamResultManager {
         echo '<p><input type="file" name="csv_file" accept=".csv" required></p>';
         echo '<p><label><input type="checkbox" name="skip_header" value="1"> ' . __( 'First row is header (skip it)', 'exam-result-manager' ) . '</label></p>';
         echo '<p><strong>' . __( 'CSV Format (detailed):', 'exam-result-manager' ) . '</strong> ' . __( 'Roll No, Name, Class, Section, Semester, Year, Code1, Subject1, Internal1, External1, Practical1, Code2, Subject2, Internal2, External2, Practical2, ...', 'exam-result-manager' ) . '</p>';
+        echo '<p class="description">' . __( 'For very large files (roughly 1,000+ rows), consider splitting into smaller batches to reduce the chance of a server timeout on shared hosting.', 'exam-result-manager' ) . '</p>';
         echo '<p><input type="submit" class="button button-primary" value="' . esc_attr__( 'Import Results', 'exam-result-manager' ) . '"></p>';
         echo '</form>';
         echo '</div>';
@@ -1167,6 +1168,15 @@ class ExamResultManager {
 
         if ( empty( $_FILES['csv_file']['tmp_name'] ) ) {
             wp_die( __( 'No file uploaded.', 'exam-result-manager' ) );
+        }
+
+        // Best-effort: large CSVs (many hundreds of rows, each a wp_insert_post()
+        // plus several update_post_meta() calls) can exceed the host's default
+        // execution time limit mid-import. Silently ignored on hosts that
+        // disable this function or otherwise restrict it -- not a hard
+        // guarantee, just removes the most common cause of a timeout.
+        if ( function_exists( 'set_time_limit' ) ) {
+            @set_time_limit( 0 );
         }
 
         $file = $_FILES['csv_file'];

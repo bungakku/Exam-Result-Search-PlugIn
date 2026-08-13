@@ -4,7 +4,7 @@
 **Tags:** exam, result, marks, student, marksheet, print, CSV import, GitHub updater  
 **Requires at least:** 5.0  
 **Tested up to:** 6.7  
-**Stable tag:** 4.7.12  
+**Stable tag:** 4.7.13  
 **License:** GPLv2 or later  
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html  
 
@@ -73,3 +73,6 @@ Example:
 
 ```csv
 101,Onisimus Lanamai,10,A,1st,2024-2025,MATH,Mathematics,8,65,18,SCI,Science,7,58,15
+```
+
+For very large files (roughly 1,000+ rows), consider splitting into smaller batches to reduce the chance of a server timeout on shared hosting.
