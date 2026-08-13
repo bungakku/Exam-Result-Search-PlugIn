@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.13
+ * Version: 4.7.14
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
  * Text Domain: exam-result-manager
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.13' );
+define( 'ERM_VERSION', '4.7.14' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -44,6 +44,7 @@ class ERM_GitHub_Updater {
         add_filter( 'plugin_action_links_' . $this->plugin_slug, array( $this, 'add_check_update_link' ) );
         add_action( 'admin_init', array( $this, 'maybe_handle_manual_check' ) );
         add_filter( 'upgrader_source_selection', array( $this, 'fix_source_folder_name' ), 10, 4 );
+        add_action( 'upgrader_process_complete', array( $this, 'clear_opcache_after_update' ), 10, 2 );
     }
 
     /**
@@ -128,6 +129,42 @@ class ERM_GitHub_Updater {
         }
 
         return $source;
+    }
+
+    /**
+     * Some hosts run PHP with an opcode cache (OPcache) that can keep
+     * serving this file's pre-update bytecode after it's replaced on disk,
+     * which makes ERM_VERSION appear stale to our own version_compare() in
+     * check_for_update() -- showing "update available" for a release
+     * that's already installed, on every page load, until something else
+     * happens to invalidate the cache. Clearing it (and forcing a fresh
+     * transient recheck) right after our own update finishes avoids that.
+     * Only covers updates performed through WordPress's own upgrader (i.e.
+     * "Update Now"); a manually replaced file wouldn't fire this hook.
+     */
+    public function clear_opcache_after_update( $upgrader, $hook_extra = array() ) {
+        if ( empty( $hook_extra['action'] ) || 'update' !== $hook_extra['action'] || empty( $hook_extra['type'] ) || 'plugin' !== $hook_extra['type'] ) {
+            return;
+        }
+
+        $updated_plugins = array();
+        if ( ! empty( $hook_extra['plugins'] ) && is_array( $hook_extra['plugins'] ) ) {
+            $updated_plugins = $hook_extra['plugins']; // Bulk update.
+        } elseif ( ! empty( $hook_extra['plugin'] ) ) {
+            $updated_plugins = array( $hook_extra['plugin'] ); // Single-plugin update.
+        }
+
+        if ( ! in_array( $this->plugin_slug, $updated_plugins, true ) ) {
+            return;
+        }
+
+        if ( function_exists( 'opcache_invalidate' ) ) {
+            opcache_invalidate( $this->plugin_file, true );
+        } elseif ( function_exists( 'opcache_reset' ) ) {
+            opcache_reset();
+        }
+
+        delete_site_transient( 'update_plugins' );
     }
 
     private function get_latest_release() {
