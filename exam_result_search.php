@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.15
+ * Version: 4.7.16
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
  * Text Domain: exam-result-manager
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.15' );
+define( 'ERM_VERSION', '4.7.16' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -41,6 +41,7 @@ class ERM_GitHub_Updater {
         add_filter( 'plugins_api', array( $this, 'plugin_info' ), 10, 3 );
         add_action( 'in_plugin_update_message-' . $this->plugin_slug, array( $this, 'update_message' ), 10, 2 );
         add_action( 'admin_notices', array( $this, 'maybe_show_error_notice' ) );
+        add_action( 'admin_notices', array( $this, 'maybe_show_diagnostic_notice' ) );
         add_filter( 'plugin_action_links_' . $this->plugin_slug, array( $this, 'add_check_update_link' ) );
         add_action( 'admin_init', array( $this, 'maybe_handle_manual_check' ) );
         add_filter( 'upgrader_source_selection', array( $this, 'fix_source_folder_name' ), 10, 4 );
@@ -70,6 +71,17 @@ class ERM_GitHub_Updater {
         delete_option( $this->error_option );
 
         $latest_version = ltrim( $release->tag_name, 'v' );
+
+        // Diagnostic record of every real check: lets us see, from wp-admin,
+        // exactly what PHP evaluated ERM_VERSION as and what was compared
+        // against it, without an extra GitHub API call to display it.
+        update_option( 'erm_last_check_debug', array(
+            'time'            => current_time( 'mysql' ),
+            'php_erm_version' => ERM_VERSION,
+            'github_latest'   => $latest_version,
+            'result'          => version_compare( $latest_version, ERM_VERSION, '>' ) ? 'update_flagged' : 'up_to_date',
+        ) );
+
         if ( version_compare( $latest_version, ERM_VERSION, '>' ) ) {
             $update_data = (object) array(
                 'slug'        => $this->slug,
@@ -286,6 +298,46 @@ class ERM_GitHub_Updater {
             '<strong>' . esc_html__( 'Exam Result Manager update check:', 'exam-result-manager' ) . '</strong> ' .
             esc_html( $error ) .
             '</p></div>';
+    }
+
+    /**
+     * TEMPORARY diagnostic notice -- not a permanent feature. Shows exactly
+     * what the most recent real update check saw: what PHP evaluated
+     * ERM_VERSION as at that moment, what GitHub's latest tag was, and what
+     * was concluded. This is here specifically to get hard data on the
+     * persisting "update available" notice issue instead of guessing at
+     * another fix; remove once that's root-caused.
+     */
+    public function maybe_show_diagnostic_notice() {
+        $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+        if ( ! $screen || 'plugins' !== $screen->id || ! current_user_can( 'update_plugins' ) ) {
+            return;
+        }
+        $debug = get_option( 'erm_last_check_debug' );
+        if ( ! is_array( $debug ) ) {
+            return;
+        }
+
+        // Cache-immune ground truth: reads the Version: header as plain
+        // text (like WordPress's own Plugins list does), never executing
+        // PHP, so it can't itself be affected by a stale opcode cache.
+        $file_header_version = '';
+        if ( function_exists( 'get_file_data' ) ) {
+            $headers = get_file_data( $this->plugin_file, array( 'Version' => 'Version' ) );
+            $file_header_version = isset( $headers['Version'] ) ? $headers['Version'] : '';
+        }
+
+        echo '<div class="notice notice-info"><p>'
+            . '<strong>Exam Result Manager diagnostic (temporary):</strong> '
+            . 'Last real check at ' . esc_html( $debug['time'] ) . ' &mdash; '
+            . 'PHP saw <code>ERM_VERSION</code> as <code>' . esc_html( $debug['php_erm_version'] ) . '</code> at check time, '
+            . 'PHP sees it as <code>' . esc_html( ERM_VERSION ) . '</code> right now, '
+            . 'the file\'s header (text-read, not executed) says <code>' . esc_html( $file_header_version ) . '</code>, '
+            . 'GitHub\'s latest tag was <code>' . esc_html( $debug['github_latest'] ) . '</code>, '
+            . 'result: <code>' . esc_html( $debug['result'] ) . '</code>.'
+            . ( $file_header_version && $file_header_version !== ERM_VERSION ? ' &mdash; <strong style="color:#b32d2e;">CONFIRMED: PHP execution is reading a stale ERM_VERSION vs. the actual file on disk right now (opcode cache).</strong>' : '' )
+            . ( $file_header_version && $debug['github_latest'] === $file_header_version && 'update_flagged' === $debug['result'] ? ' &mdash; <strong style="color:#b32d2e;">CONFIRMED: file header matches GitHub\'s latest, yet an update was still flagged -- the stale read happened at check time.</strong>' : '' )
+            . '</p></div>';
     }
 }
 
@@ -1781,5 +1833,6 @@ function exam_result_manager_uninstall() {
     delete_option( 'exam_max_practical' );
     delete_option( 'erm_github_update_error' );
     delete_option( 'erm_lookup_key_migrated' );
+    delete_option( 'erm_last_check_debug' );
     delete_option( 'exam_delete_data_on_uninstall' );
 }
