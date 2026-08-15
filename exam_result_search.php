@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.14
+ * Version: 4.7.15
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
  * Text Domain: exam-result-manager
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.14' );
+define( 'ERM_VERSION', '4.7.15' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -742,6 +742,14 @@ class ExamResultManager {
         register_setting( 'exam_result_settings_group', 'exam_max_internal', 'absint' );
         register_setting( 'exam_result_settings_group', 'exam_max_external', 'absint' );
         register_setting( 'exam_result_settings_group', 'exam_max_practical', 'absint' );
+        register_setting( 'exam_result_settings_group', 'exam_delete_data_on_uninstall', array( $this, 'sanitize_checkbox' ) );
+    }
+
+    // Checkbox settings are only present in $_POST when checked; the
+    // settings form pairs this with a hidden value="0" field of the same
+    // name so unchecking reliably saves as off, not just "unchanged".
+    public function sanitize_checkbox( $value ) {
+        return ( '1' === $value ) ? 1 : 0;
     }
 
     // Keep logo width within a sane, printable range (px)
@@ -900,6 +908,17 @@ class ExamResultManager {
                             <label style="margin-left:15px;"><?php _e( 'Practical:', 'exam-result-manager' ); ?></label>
                             <input type="number" name="exam_max_practical" value="<?php echo esc_attr( get_option( 'exam_max_practical', 20 ) ); ?>" step="1" style="width:80px;">
                             <p class="description"><?php _e( 'These values are used to calculate subject totals and overall percentage. They apply to all subjects.', 'exam-result-manager' ); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php _e( 'Delete Data on Uninstall', 'exam-result-manager' ); ?></th>
+                        <td>
+                            <label>
+                                <input type="hidden" name="exam_delete_data_on_uninstall" value="0">
+                                <input type="checkbox" name="exam_delete_data_on_uninstall" value="1" <?php checked( get_option( 'exam_delete_data_on_uninstall', 0 ), 1 ); ?>>
+                                <?php _e( 'Permanently delete all exam results and plugin settings if this plugin is ever uninstalled (deleted) from the Plugins page.', 'exam-result-manager' ); ?>
+                            </label>
+                            <p class="description" style="color:#b32d2e;"><strong><?php _e( 'Off by default.', 'exam-result-manager' ); ?></strong> <?php _e( 'Leave this unchecked to keep student records safe if the plugin is ever removed -- deactivating or deleting the plugin will not touch your data unless this is explicitly turned on. This cannot be undone once triggered.', 'exam-result-manager' ); ?></p>
                         </td>
                     </tr>
                 </table>
@@ -1729,6 +1748,16 @@ new ExamResultManager();
 
 register_uninstall_hook( __FILE__, 'exam_result_manager_uninstall' );
 function exam_result_manager_uninstall() {
+    // Data preservation is the default: uninstalling (deactivate + Delete
+    // from the Plugins page) only removes the plugin's code unless the
+    // admin has explicitly opted in via Marksheet Settings -> "Delete Data
+    // on Uninstall". Without that, exam results and settings are left
+    // untouched, so an accidental or exploratory Delete click can't destroy
+    // student records.
+    if ( ! get_option( 'exam_delete_data_on_uninstall' ) ) {
+        return;
+    }
+
     $posts = get_posts( array(
         'post_type'      => 'exam_result',
         'posts_per_page' => -1,
@@ -1752,4 +1781,5 @@ function exam_result_manager_uninstall() {
     delete_option( 'exam_max_practical' );
     delete_option( 'erm_github_update_error' );
     delete_option( 'erm_lookup_key_migrated' );
+    delete_option( 'exam_delete_data_on_uninstall' );
 }
