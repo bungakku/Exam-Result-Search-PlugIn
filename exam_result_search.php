@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.16
+ * Version: 4.7.17
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
  * Text Domain: exam-result-manager
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.16' );
+define( 'ERM_VERSION', '4.7.17' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -572,6 +572,23 @@ class ExamResultManager {
         return 'F';
     }
 
+    /**
+     * Bounds a submitted mark to [0, $max] so e.g. an accidental Internal=999
+     * can't silently push a subject or overall percentage past 100%. Applied
+     * at both entry points (manual save and CSV import). $max <= 0 (not
+     * configured) is treated as "no upper bound", only clamping negatives.
+     */
+    private function clamp_mark( $value, $max ) {
+        $value = floatval( $value );
+        if ( $value < 0 ) {
+            return 0.0;
+        }
+        if ( $max > 0 && $value > $max ) {
+            return floatval( $max );
+        }
+        return $value;
+    }
+
     public function save_result_data( $post_id, $post = null ) {
         if ( ! isset( $_POST['exam_result_nonce_field'] ) ||
              ! wp_verify_nonce( $_POST['exam_result_nonce_field'], 'exam_result_nonce' ) ) {
@@ -606,6 +623,11 @@ class ExamResultManager {
             get_post_meta( $post_id, '_exam_year', true )
         ) );
 
+        $max_internal = get_option( 'exam_max_internal', 10 );
+        $max_external = get_option( 'exam_max_external', 70 );
+        $max_practical = get_option( 'exam_max_practical', 20 );
+        $max_per_subject = $max_internal + $max_external + $max_practical;
+
         $detailed_subjects = array();
         if ( isset( $_POST['subject_code'] ) && is_array( $_POST['subject_code'] ) ) {
             $codes      = $_POST['subject_code'];
@@ -618,19 +640,14 @@ class ExamResultManager {
                     $detailed_subjects[] = array(
                         'code'      => isset( $codes[ $i ] ) ? sanitize_text_field( $codes[ $i ] ) : '',
                         'name'      => sanitize_text_field( $names[ $i ] ),
-                        'internal'  => isset( $internals[ $i ] ) ? floatval( $internals[ $i ] ) : 0,
-                        'external'  => isset( $externals[ $i ] ) ? floatval( $externals[ $i ] ) : 0,
-                        'practical' => isset( $practicals[ $i ] ) ? floatval( $practicals[ $i ] ) : 0,
+                        'internal'  => $this->clamp_mark( isset( $internals[ $i ] ) ? $internals[ $i ] : 0, $max_internal ),
+                        'external'  => $this->clamp_mark( isset( $externals[ $i ] ) ? $externals[ $i ] : 0, $max_external ),
+                        'practical' => $this->clamp_mark( isset( $practicals[ $i ] ) ? $practicals[ $i ] : 0, $max_practical ),
                     );
                 }
             }
         }
         update_post_meta( $post_id, '_detailed_subjects', $detailed_subjects );
-
-        $max_internal = get_option( 'exam_max_internal', 10 );
-        $max_external = get_option( 'exam_max_external', 70 );
-        $max_practical = get_option( 'exam_max_practical', 20 );
-        $max_per_subject = $max_internal + $max_external + $max_practical;
 
         $overall_total = 0;
         foreach ( $detailed_subjects as $subj ) {
@@ -1343,9 +1360,9 @@ class ExamResultManager {
                 if ( $i + 4 >= count( $data ) ) break;
                 $code = sanitize_text_field( $data[ $i ] );
                 $subj_name = sanitize_text_field( $data[ $i + 1 ] );
-                $internal = floatval( $data[ $i + 2 ] );
-                $external = floatval( $data[ $i + 3 ] );
-                $practical = floatval( $data[ $i + 4 ] );
+                $internal = $this->clamp_mark( $data[ $i + 2 ], $max_internal );
+                $external = $this->clamp_mark( $data[ $i + 3 ], $max_external );
+                $practical = $this->clamp_mark( $data[ $i + 4 ], $max_practical );
                 if ( empty( $subj_name ) ) continue;
                 $detailed_subjects[] = array(
                     'code'      => $code,
