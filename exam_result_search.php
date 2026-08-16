@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.21
+ * Version: 4.7.22
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
  * Text Domain: exam-result-manager
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.21' );
+define( 'ERM_VERSION', '4.7.22' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -647,14 +647,11 @@ class ExamResultManager {
         }
     }
 
+    // Overall and subject grades use identical thresholds; kept as a thin
+    // alias to calculate_subject_grade() (rather than merging call sites)
+    // so no call sites need to change, while removing the duplicated logic.
     private function calculate_overall_grade( $percentage ) {
-        if ( $percentage >= 90 ) return 'A+';
-        if ( $percentage >= 80 ) return 'A';
-        if ( $percentage >= 70 ) return 'B+';
-        if ( $percentage >= 60 ) return 'B';
-        if ( $percentage >= 50 ) return 'C';
-        if ( $percentage >= 40 ) return 'D';
-        return 'F';
+        return $this->calculate_subject_grade( $percentage );
     }
 
     /**
