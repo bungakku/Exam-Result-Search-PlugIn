@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.18
+ * Version: 4.7.19
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
  * Text Domain: exam-result-manager
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.18' );
+define( 'ERM_VERSION', '4.7.19' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -55,6 +55,29 @@ class ERM_GitHub_Updater {
      * that was the previous source of stale "no update available" results
      * surviving past an actual new release.
      */
+    /**
+     * Diagnostic testing (v4.7.16-4.7.18) confirmed ERM_VERSION can briefly
+     * read stale in a running PHP process shortly after an update, due to
+     * opcode caching, even though clear_opcache_after_update() attempts to
+     * invalidate it proactively -- that's timing-dependent on when exactly
+     * this filter runs relative to the cache actually clearing, and isn't
+     * reliably winning that race on every host. This reads the plugin
+     * header as plain text (get_file_data(), same technique WordPress's own
+     * get_plugin_data() uses) which never invokes PHP's compiler/cache at
+     * all, so it can't go stale the same way. Returns whichever of the two
+     * is higher, so a normally-fresh ERM_VERSION is still trusted as-is.
+     */
+    private function get_installed_version() {
+        $version = ERM_VERSION;
+        if ( function_exists( 'get_file_data' ) ) {
+            $headers = get_file_data( $this->plugin_file, array( 'Version' => 'Version' ) );
+            if ( ! empty( $headers['Version'] ) && version_compare( $headers['Version'], $version, '>' ) ) {
+                $version = $headers['Version'];
+            }
+        }
+        return $version;
+    }
+
     public function check_for_update( $transient ) {
         if ( empty( $transient->checked ) ) {
             return $transient;
@@ -71,6 +94,7 @@ class ERM_GitHub_Updater {
         delete_option( $this->error_option );
 
         $latest_version = ltrim( $release->tag_name, 'v' );
+        $installed_version = $this->get_installed_version();
 
         // Diagnostic record of every real check: lets us see, from wp-admin,
         // exactly what PHP evaluated ERM_VERSION as and what was compared
@@ -79,10 +103,10 @@ class ERM_GitHub_Updater {
             'time'            => current_time( 'mysql' ),
             'php_erm_version' => ERM_VERSION,
             'github_latest'   => $latest_version,
-            'result'          => version_compare( $latest_version, ERM_VERSION, '>' ) ? 'update_flagged' : 'up_to_date',
+            'result'          => version_compare( $latest_version, $installed_version, '>' ) ? 'update_flagged' : 'up_to_date',
         ) );
 
-        if ( version_compare( $latest_version, ERM_VERSION, '>' ) ) {
+        if ( version_compare( $latest_version, $installed_version, '>' ) ) {
             $update_data = (object) array(
                 'slug'        => $this->slug,
                 'plugin'      => $this->plugin_slug,
@@ -99,7 +123,7 @@ class ERM_GitHub_Updater {
             $transient->no_update[ $this->plugin_slug ] = (object) array(
                 'slug'        => $this->slug,
                 'plugin'      => $this->plugin_slug,
-                'new_version' => ERM_VERSION,
+                'new_version' => $installed_version,
                 'url'         => 'https://github.com/' . $this->github_repo,
             );
         }
