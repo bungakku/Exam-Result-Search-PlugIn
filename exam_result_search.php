@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.17
+ * Version: 4.7.18
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
  * Text Domain: exam-result-manager
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.17' );
+define( 'ERM_VERSION', '4.7.18' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -1750,7 +1750,7 @@ class ExamResultManager {
             <?php $this->render_institute_header( 'print' ); ?>
             <div class="subtitle" style="text-align:center; margin-bottom:20px;">
                 <?php _e( 'Statement of Marks', 'exam-result-manager' ); ?><br>
-                <?php echo esc_html( $semester ) . ' Semester, ' . esc_html( $year ); ?>
+                <?php echo esc_html( sprintf( __( '%1$s Semester, %2$s', 'exam-result-manager' ), $semester, $year ) ); ?>
             </div>
 
             <div class="student-details">
