@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.19
+ * Version: 4.7.20
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
  * Text Domain: exam-result-manager
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.19' );
+define( 'ERM_VERSION', '4.7.20' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -575,14 +575,14 @@ class ExamResultManager {
 
         return '<div class="detailed-subject-row" style="margin-bottom:15px; padding:10px; border:1px solid #ddd; background:#fafafa;">'
              . '<div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">'
-             . '<input type="text" name="subject_code[]" placeholder="' . esc_attr__( 'Code', 'exam-result-manager' ) . '" value="' . esc_attr( $code ) . '" style="width:80px;">'
-             . '<input type="text" name="subject_name[]" placeholder="' . esc_attr__( 'Subject Name', 'exam-result-manager' ) . '" value="' . esc_attr( $name ) . '" style="width:150px;">'
-             . '<input type="number" name="subject_internal[]" class="internal-marks" placeholder="Int (' . esc_attr( $max_internal ) . ')" value="' . esc_attr( $internal ) . '" style="width:80px;" step="0.01">'
-             . '<input type="number" name="subject_external[]" class="external-marks" placeholder="Ext (' . esc_attr( $max_external ) . ')" value="' . esc_attr( $external ) . '" style="width:80px;" step="0.01">'
-             . '<input type="number" name="subject_practical[]" class="practical-marks" placeholder="Prac (' . esc_attr( $max_practical ) . ')" value="' . esc_attr( $practical ) . '" style="width:80px;" step="0.01">'
-             . '<input type="text" name="subject_total[]" class="subject-total" placeholder="Total" value="' . esc_attr( $total ) . '" style="width:80px;" readonly>'
-             . '<input type="text" name="subject_grade[]" class="subject-grade" placeholder="Grade" value="' . esc_attr( $grade ) . '" style="width:60px;" readonly>'
-             . '<button type="button" class="button remove-detailed-subject">-</button>'
+             . '<input type="text" name="subject_code[]" placeholder="' . esc_attr__( 'Code', 'exam-result-manager' ) . '" aria-label="' . esc_attr__( 'Subject Code', 'exam-result-manager' ) . '" value="' . esc_attr( $code ) . '" style="width:80px;">'
+             . '<input type="text" name="subject_name[]" placeholder="' . esc_attr__( 'Subject Name', 'exam-result-manager' ) . '" aria-label="' . esc_attr__( 'Subject Name', 'exam-result-manager' ) . '" value="' . esc_attr( $name ) . '" style="width:150px;">'
+             . '<input type="number" name="subject_internal[]" class="internal-marks" placeholder="Int (' . esc_attr( $max_internal ) . ')" aria-label="' . esc_attr( sprintf( __( 'Internal marks, out of %d', 'exam-result-manager' ), $max_internal ) ) . '" value="' . esc_attr( $internal ) . '" style="width:80px;" step="0.01">'
+             . '<input type="number" name="subject_external[]" class="external-marks" placeholder="Ext (' . esc_attr( $max_external ) . ')" aria-label="' . esc_attr( sprintf( __( 'External marks, out of %d', 'exam-result-manager' ), $max_external ) ) . '" value="' . esc_attr( $external ) . '" style="width:80px;" step="0.01">'
+             . '<input type="number" name="subject_practical[]" class="practical-marks" placeholder="Prac (' . esc_attr( $max_practical ) . ')" aria-label="' . esc_attr( sprintf( __( 'Practical marks, out of %d', 'exam-result-manager' ), $max_practical ) ) . '" value="' . esc_attr( $practical ) . '" style="width:80px;" step="0.01">'
+             . '<input type="text" name="subject_total[]" class="subject-total" placeholder="Total" aria-label="' . esc_attr__( 'Subject total (calculated)', 'exam-result-manager' ) . '" value="' . esc_attr( $total ) . '" style="width:80px;" readonly>'
+             . '<input type="text" name="subject_grade[]" class="subject-grade" placeholder="Grade" aria-label="' . esc_attr__( 'Subject grade (calculated)', 'exam-result-manager' ) . '" value="' . esc_attr( $grade ) . '" style="width:60px;" readonly>'
+             . '<button type="button" class="button remove-detailed-subject" aria-label="' . esc_attr__( 'Remove this subject row', 'exam-result-manager' ) . '">-</button>'
              . '</div></div>';
     }
 
