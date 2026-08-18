@@ -1,11 +1,8 @@
 :root {
     --primary: #2563eb;
-    --primary-dark: #1d4ed8;
     --accent: #0ea5e9;
-    --bg: #f8fafc;
     --card: #ffffff;
     --text: #0f172a;
-    --muted: #64748b;
     --border: #e2e8f0;
     --success: #16a34a;
     --danger: #dc2626;
@@ -163,6 +160,22 @@
     .exam-result table {
         min-width: auto;
     }
+}
+
+/* ===== GRADE COLOR-CODING ===== */
+/* Matched by the subject-wise Grade cell and the Overall Grade line, via
+   PHP-rendered data-grade="<letter>" attributes. Grade letters remain as
+   visible text in every case -- color is a supplementary visual cue only,
+   never the sole way grade information is conveyed. */
+.exam-result [data-grade] {
+    font-weight: 700;
+}
+.exam-result [data-grade="A+"],
+.exam-result [data-grade="A"] {
+    color: var(--success);
+}
+.exam-result [data-grade="F"] {
+    color: var(--danger);
 }
 
 .required-field::after {

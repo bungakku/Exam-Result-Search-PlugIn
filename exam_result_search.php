@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.23
+ * Version: 4.7.24
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
  * Text Domain: exam-result-manager
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.23' );
+define( 'ERM_VERSION', '4.7.24' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -1505,7 +1505,7 @@ class ExamResultManager {
                                                 <td><?php echo esc_html( $subj['external'] ); ?></td>
                                                 <td><?php echo esc_html( $subj['practical'] ); ?></td>
                                                 <td><?php echo esc_html( $subj_total ); ?></td>
-                                                <td><?php echo esc_html( $subj_grade ); ?></td>
+                                                <td data-grade="<?php echo esc_attr( $subj_grade ); ?>"><?php echo esc_html( $subj_grade ); ?></td>
                                             </tr>
                                         <?php endforeach; ?>
                                         </tbody>
@@ -1513,7 +1513,7 @@ class ExamResultManager {
                                 </div>
                             <?php endif; ?>
                             <p><strong><?php _e( 'Overall Total:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $total ); ?></p>
-                            <p><strong><?php _e( 'Overall Grade:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $grade ); ?></p>
+                            <p><strong><?php _e( 'Overall Grade:', 'exam-result-manager' ); ?></strong> <span data-grade="<?php echo esc_attr( $grade ); ?>"><?php echo esc_html( $grade ); ?></span></p>
 
                             <button class="print-button" onclick="printMarksheet(<?php echo intval( $id ); ?>)"><?php _e( 'Print Marksheet', 'exam-result-manager' ); ?></button>
                         </div>
