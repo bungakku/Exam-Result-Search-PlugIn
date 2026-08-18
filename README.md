@@ -4,7 +4,8 @@
 **Tags:** exam, result, marks, student, marksheet, print, CSV import, GitHub updater  
 **Requires at least:** 5.0  
 **Tested up to:** 6.7  
-**Stable tag:** 4.7.26  
+**Requires PHP:** 8.0  
+**Stable tag:** 4.7.27  
 **License:** GPLv2 or later  
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html  
 
