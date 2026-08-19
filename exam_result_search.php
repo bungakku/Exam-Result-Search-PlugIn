@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.28
+ * Version: 4.7.29
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.28' );
+define( 'ERM_VERSION', '4.7.29' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -555,6 +555,25 @@ class ExamResultManager {
         return $value;
     }
 
+    /**
+     * Neutralizes CSV/Excel formula-injection prefixes (=, +, -, @) on
+     * text fields. The plugin doesn't currently export data back to
+     * CSV/Excel anywhere, so this isn't exploitable today -- added as
+     * cheap, low-risk insurance so stored data is already safe if an
+     * export feature is ever added later. Applied uniformly regardless of
+     * how a result was entered (manual form or CSV import), since a future
+     * export would likely include both. Prepending a single quote is the
+     * standard, non-destructive neutralization: spreadsheet apps treat the
+     * cell as plain text and don't display the leading quote itself.
+     */
+    private function sanitize_formula_injection( $value ) {
+        $value = (string) $value;
+        if ( isset( $value[0] ) && in_array( $value[0], array( '=', '+', '-', '@' ), true ) ) {
+            $value = "'" . $value;
+        }
+        return $value;
+    }
+
     public function save_result_data( $post_id, $post = null ) {
         if ( ! isset( $_POST['exam_result_nonce_field'] ) ||
              ! wp_verify_nonce( $_POST['exam_result_nonce_field'], 'exam_result_nonce' ) ) {
@@ -573,7 +592,7 @@ class ExamResultManager {
         $fields = array( 'student_name', 'student_class', 'student_section', 'student_rollno', 'student_semester', 'exam_year' );
         foreach ( $fields as $field ) {
             if ( isset( $_POST[ $field ] ) ) {
-                update_post_meta( $post_id, "_$field", sanitize_text_field( $_POST[ $field ] ) );
+                update_post_meta( $post_id, "_$field", $this->sanitize_formula_injection( sanitize_text_field( $_POST[ $field ] ) ) );
             }
         }
 
@@ -604,8 +623,8 @@ class ExamResultManager {
             for ( $i = 0; $i < count( $codes ); $i++ ) {
                 if ( ! empty( $names[ $i ] ) ) {
                     $detailed_subjects[] = array(
-                        'code'      => isset( $codes[ $i ] ) ? sanitize_text_field( $codes[ $i ] ) : '',
-                        'name'      => sanitize_text_field( $names[ $i ] ),
+                        'code'      => $this->sanitize_formula_injection( isset( $codes[ $i ] ) ? sanitize_text_field( $codes[ $i ] ) : '' ),
+                        'name'      => $this->sanitize_formula_injection( sanitize_text_field( $names[ $i ] ) ),
                         'internal'  => $this->clamp_mark( isset( $internals[ $i ] ) ? $internals[ $i ] : 0, $max_internal ),
                         'external'  => $this->clamp_mark( isset( $externals[ $i ] ) ? $externals[ $i ] : 0, $max_external ),
                         'practical' => $this->clamp_mark( isset( $practicals[ $i ] ) ? $practicals[ $i ] : 0, $max_practical ),
@@ -1295,12 +1314,12 @@ class ExamResultManager {
                 $errors++;
                 continue;
             }
-            $rollno   = sanitize_text_field( $data[0] );
-            $name     = sanitize_text_field( $data[1] );
-            $class    = sanitize_text_field( $data[2] );
-            $section  = sanitize_text_field( $data[3] );
-            $semester = sanitize_text_field( $data[4] );
-            $year     = sanitize_text_field( $data[5] );
+            $rollno   = $this->sanitize_formula_injection( sanitize_text_field( $data[0] ) );
+            $name     = $this->sanitize_formula_injection( sanitize_text_field( $data[1] ) );
+            $class    = $this->sanitize_formula_injection( sanitize_text_field( $data[2] ) );
+            $section  = $this->sanitize_formula_injection( sanitize_text_field( $data[3] ) );
+            $semester = $this->sanitize_formula_injection( sanitize_text_field( $data[4] ) );
+            $year     = $this->sanitize_formula_injection( sanitize_text_field( $data[5] ) );
 
             $existing = get_posts( array(
                 'post_type'      => 'exam_result',
@@ -1324,8 +1343,8 @@ class ExamResultManager {
             $overall_total = 0;
             for ( $i = 6; $i < count( $data ); $i += 5 ) {
                 if ( $i + 4 >= count( $data ) ) break;
-                $code = sanitize_text_field( $data[ $i ] );
-                $subj_name = sanitize_text_field( $data[ $i + 1 ] );
+                $code = $this->sanitize_formula_injection( sanitize_text_field( $data[ $i ] ) );
+                $subj_name = $this->sanitize_formula_injection( sanitize_text_field( $data[ $i + 1 ] ) );
                 $internal = $this->clamp_mark( $data[ $i + 2 ], $max_internal );
                 $external = $this->clamp_mark( $data[ $i + 3 ], $max_external );
                 $practical = $this->clamp_mark( $data[ $i + 4 ], $max_practical );
@@ -1403,11 +1422,11 @@ class ExamResultManager {
         ?>
         <div class="exam-result-search-container">
             <?php
-            $search_roll   = isset( $_POST['search_rollno'] ) ? sanitize_text_field( $_POST['search_rollno'] ) : '';
-            $search_class  = isset( $_POST['search_class'] ) ? sanitize_text_field( $_POST['search_class'] ) : '';
-            $search_sem    = isset( $_POST['search_semester'] ) ? sanitize_text_field( $_POST['search_semester'] ) : '';
-            $search_year   = isset( $_POST['search_year'] ) ? sanitize_text_field( $_POST['search_year'] ) : '';
-            $search_section = isset( $_POST['search_section'] ) ? sanitize_text_field( $_POST['search_section'] ) : '';
+            $search_roll   = isset( $_POST['search_rollno'] ) ? $this->sanitize_formula_injection( sanitize_text_field( $_POST['search_rollno'] ) ) : '';
+            $search_class  = isset( $_POST['search_class'] ) ? $this->sanitize_formula_injection( sanitize_text_field( $_POST['search_class'] ) ) : '';
+            $search_sem    = isset( $_POST['search_semester'] ) ? $this->sanitize_formula_injection( sanitize_text_field( $_POST['search_semester'] ) ) : '';
+            $search_year   = isset( $_POST['search_year'] ) ? $this->sanitize_formula_injection( sanitize_text_field( $_POST['search_year'] ) ) : '';
+            $search_section = isset( $_POST['search_section'] ) ? $this->sanitize_formula_injection( sanitize_text_field( $_POST['search_section'] ) ) : '';
 
             $search_rate_limited = ( $search_roll && $search_class && $search_sem && $search_year ) ? $this->is_rate_limited( 'search' ) : false;
 

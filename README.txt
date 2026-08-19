@@ -4,7 +4,7 @@ Tags: exam, result, marks, student, marksheet, print, CSV import, GitHub updater
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 8.0
-Stable tag: 4.7.28
+Stable tag: 4.7.29
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -78,6 +78,9 @@ For very large files (roughly 1,000+ rows), consider splitting into smaller batc
 == Changelog ==
 
 Detailed tracking begins at 4.7.2; earlier versions (4.7.1 and prior) predate this changelog.
+
+= 4.7.29 =
+* Added defensive CSV/Excel formula-injection sanitization on text fields (Roll No, Name, Class, Section, Semester, Year, Subject Code/Name), applied consistently across manual entry, CSV import, and search. Preemptive -- no export feature exists yet, but stored data is now safe if one is added later.
 
 = 4.7.28 =
 * Guarded against a CSV import crash if the uploaded file's temp handle ever fails to open.
