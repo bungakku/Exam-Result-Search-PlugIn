@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.29
+ * Version: 4.7.30
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.29' );
+define( 'ERM_VERSION', '4.7.30' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -784,12 +784,14 @@ class ExamResultManager {
         register_setting( 'exam_result_settings_group', 'exam_institute_name', 'sanitize_text_field' );
         register_setting( 'exam_result_settings_group', 'exam_institute_logo', 'esc_url_raw' );
         register_setting( 'exam_result_settings_group', 'exam_institute_tagline', 'sanitize_text_field' );
+        register_setting( 'exam_result_settings_group', 'exam_institute_description', 'sanitize_text_field' );
         register_setting( 'exam_result_settings_group', 'exam_logo_width', array( $this, 'sanitize_logo_width' ) );
         register_setting( 'exam_result_settings_group', 'exam_logo_title_gap', array( $this, 'sanitize_logo_gap' ) );
         register_setting( 'exam_result_settings_group', 'exam_header_layout', array( $this, 'sanitize_header_layout' ) );
         register_setting( 'exam_result_settings_group', 'exam_header_align', array( $this, 'sanitize_align' ) );
         register_setting( 'exam_result_settings_group', 'exam_title_size', array( $this, 'sanitize_title_size' ) );
         register_setting( 'exam_result_settings_group', 'exam_tagline_size', array( $this, 'sanitize_tagline_size' ) );
+        register_setting( 'exam_result_settings_group', 'exam_description_size', array( $this, 'sanitize_description_size' ) );
         register_setting( 'exam_result_settings_group', 'exam_max_internal', 'absint' );
         register_setting( 'exam_result_settings_group', 'exam_max_external', 'absint' );
         register_setting( 'exam_result_settings_group', 'exam_max_practical', 'absint' );
@@ -860,16 +862,30 @@ class ExamResultManager {
         return $value;
     }
 
+    // Description font size (px) -- same bounds as Tagline, smaller default
+    public function sanitize_description_size( $value ) {
+        $value = absint( $value );
+        if ( $value < 8 ) {
+            $value = 8;
+        }
+        if ( $value > 48 ) {
+            $value = 48;
+        }
+        return $value;
+    }
+
     public function render_settings_page() {
-        $logo_url     = get_option( 'exam_institute_logo', '' );
-        $logo_width   = get_option( 'exam_logo_width', 120 );
-        $logo_gap     = get_option( 'exam_logo_title_gap', 20 );
-        $institute    = get_option( 'exam_institute_name', '' );
-        $tagline      = get_option( 'exam_institute_tagline', '' );
-        $layout       = get_option( 'exam_header_layout', 'logo_left' );
-        $align        = get_option( 'exam_header_align', 'left' );
-        $title_size   = get_option( 'exam_title_size', 24 );
-        $tagline_size = get_option( 'exam_tagline_size', 14 );
+        $logo_url         = get_option( 'exam_institute_logo', '' );
+        $logo_width       = get_option( 'exam_logo_width', 120 );
+        $logo_gap         = get_option( 'exam_logo_title_gap', 20 );
+        $institute        = get_option( 'exam_institute_name', '' );
+        $tagline          = get_option( 'exam_institute_tagline', '' );
+        $description      = get_option( 'exam_institute_description', '' );
+        $layout           = get_option( 'exam_header_layout', 'logo_left' );
+        $align            = get_option( 'exam_header_align', 'left' );
+        $title_size       = get_option( 'exam_title_size', 24 );
+        $tagline_size     = get_option( 'exam_tagline_size', 14 );
+        $description_size = get_option( 'exam_description_size', 12 );
         ?>
         <div class="wrap">
             <h1><?php _e( 'Marksheet Settings', 'exam-result-manager' ); ?></h1>
@@ -885,6 +901,13 @@ class ExamResultManager {
                         <td>
                             <input type="text" name="exam_institute_tagline" id="exam_institute_tagline" value="<?php echo esc_attr( $tagline ); ?>" class="regular-text" placeholder="<?php esc_attr_e( 'e.g., Affiliated to State Board of Education', 'exam-result-manager' ); ?>" />
                             <p class="description"><?php _e( 'A short line shown below the institute name, wherever it appears (search results and printed marksheets). Leave blank to hide it.', 'exam-result-manager' ); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="exam_institute_description"><?php _e( 'Description (optional)', 'exam-result-manager' ); ?></label></th>
+                        <td>
+                            <input type="text" name="exam_institute_description" id="exam_institute_description" value="<?php echo esc_attr( $description ); ?>" class="regular-text" placeholder="<?php esc_attr_e( 'e.g., Established 1985 | NAAC A+ Accredited', 'exam-result-manager' ); ?>" />
+                            <p class="description"><?php _e( 'An optional supporting line shown below the tagline, in a smaller font. Leave blank to hide it.', 'exam-result-manager' ); ?></p>
                         </td>
                     </tr>
                     <tr>
@@ -943,6 +966,12 @@ class ExamResultManager {
                         </td>
                     </tr>
                     <tr>
+                        <th scope="row"><label for="exam_description_size"><?php _e( 'Description Font Size', 'exam-result-manager' ); ?></label></th>
+                        <td>
+                            <input type="number" name="exam_description_size" id="exam_description_size" value="<?php echo esc_attr( $description_size ); ?>" min="8" max="48" step="1" style="width:90px;"> px
+                        </td>
+                    </tr>
+                    <tr>
                         <th scope="row"><?php _e( 'Header Preview', 'exam-result-manager' ); ?></th>
                         <td>
                             <?php $this->render_institute_header( 'preview' ); ?>
@@ -997,22 +1026,24 @@ class ExamResultManager {
             // preview block via AJAX-free client-side rebuild, so layout changes
             // (logo position, alignment) are reflected exactly, not just CSS tweaks.
             var fields = [
-                '#exam_institute_name', '#exam_institute_tagline', '#exam_institute_logo',
+                '#exam_institute_name', '#exam_institute_tagline', '#exam_institute_description', '#exam_institute_logo',
                 '#exam_logo_width', '#exam_logo_title_gap', '#exam_header_layout',
-                '#exam_header_align', '#exam_title_size', '#exam_tagline_size'
+                '#exam_header_align', '#exam_title_size', '#exam_tagline_size', '#exam_description_size'
             ];
 
             function currentValues() {
                 return {
                     name: $('#exam_institute_name').val(),
                     tagline: $('#exam_institute_tagline').val(),
+                    description: $('#exam_institute_description').val(),
                     logo: $('#exam_institute_logo').val(),
                     logoWidth: parseInt($('#exam_logo_width').val(), 10) || 0,
                     gap: parseInt($('#exam_logo_title_gap').val(), 10) || 0,
                     layout: $('#exam_header_layout').val(),
                     align: $('#exam_header_align').val(),
                     titleSize: parseInt($('#exam_title_size').val(), 10) || 24,
-                    taglineSize: parseInt($('#exam_tagline_size').val(), 10) || 14
+                    taglineSize: parseInt($('#exam_tagline_size').val(), 10) || 14,
+                    descriptionSize: parseInt($('#exam_description_size').val(), 10) || 12
                 };
             }
 
@@ -1058,6 +1089,9 @@ class ExamResultManager {
                 if (v.tagline) {
                     $textBlock.append($('<div></div>').css({ color: '#64748b', fontStyle: 'italic', marginTop: '4px', fontSize: v.taglineSize + 'px' }).text(v.tagline));
                 }
+                if (v.description) {
+                    $textBlock.append($('<div></div>').css({ color: '#64748b', marginTop: '2px', fontSize: v.descriptionSize + 'px' }).text(v.description));
+                }
                 $container.append($textBlock);
                 $wrap.append($container);
             }
@@ -1093,12 +1127,14 @@ class ExamResultManager {
         $institute_name = get_option( 'exam_institute_name', '' );
         $logo_url       = get_option( 'exam_institute_logo', '' );
         $tagline        = get_option( 'exam_institute_tagline', '' );
+        $description    = get_option( 'exam_institute_description', '' );
         $logo_width     = get_option( 'exam_logo_width', 120 );
         $logo_gap       = get_option( 'exam_logo_title_gap', 20 );
         $layout         = get_option( 'exam_header_layout', 'logo_left' );
         $align          = get_option( 'exam_header_align', 'left' );
         $title_size     = get_option( 'exam_title_size', 24 );
         $tagline_size   = get_option( 'exam_tagline_size', 14 );
+        $description_size = get_option( 'exam_description_size', 12 );
 
         if ( ! $institute_name && ! $logo_url ) {
             return;
@@ -1140,7 +1176,7 @@ class ExamResultManager {
             );
         }
 
-        if ( $institute_name || $tagline ) {
+        if ( $institute_name || $tagline || $description ) {
             $text_style = sprintf( 'text-align:%s; %s', esc_attr( $align ), ( 'logo_top' === $layout ) ? 'width:100%;' : '' );
             echo '<div style="' . esc_attr( $text_style ) . '">';
             if ( $institute_name ) {
@@ -1155,6 +1191,13 @@ class ExamResultManager {
                     '<div class="exam-result-institute-tagline" style="color:#64748b; font-style:italic; margin-top:4px; font-size:%dpx; line-height:1.3;">%s</div>',
                     intval( $tagline_size ),
                     esc_html( $tagline )
+                );
+            }
+            if ( $description ) {
+                printf(
+                    '<div class="exam-result-institute-description" style="color:#64748b; margin-top:2px; font-size:%dpx; line-height:1.3;">%s</div>',
+                    intval( $description_size ),
+                    esc_html( $description )
                 );
             }
             echo '</div>';
@@ -1824,12 +1867,14 @@ function exam_result_manager_uninstall() {
     delete_option( 'exam_institute_name' );
     delete_option( 'exam_institute_logo' );
     delete_option( 'exam_institute_tagline' );
+    delete_option( 'exam_institute_description' );
     delete_option( 'exam_logo_width' );
     delete_option( 'exam_logo_title_gap' );
     delete_option( 'exam_header_layout' );
     delete_option( 'exam_header_align' );
     delete_option( 'exam_title_size' );
     delete_option( 'exam_tagline_size' );
+    delete_option( 'exam_description_size' );
     delete_option( 'exam_max_internal' );
     delete_option( 'exam_max_external' );
     delete_option( 'exam_max_practical' );

@@ -5,7 +5,7 @@
 **Requires at least:** 5.0  
 **Tested up to:** 6.7  
 **Requires PHP:** 8.0  
-**Stable tag:** 4.7.29  
+**Stable tag:** 4.7.30  
 **License:** GPLv2 or later  
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html  
 
@@ -44,6 +44,7 @@ Under **Exam Results** → **Marksheet Settings** you can configure:
 
 - **Institute Name** – shown on every result card and printed marksheet.
 - **Tagline (optional)** – a short line shown below the institute name wherever it appears. Leave blank to hide it.
+- **Description (optional)** – an additional supporting line shown below the tagline, in a smaller font. Leave blank to hide it.
 - **Institute Logo (URL)** – upload via the media library or paste a URL.
 - **Logo Width** – in pixels (20–400). Height scales automatically.
 - **Logo Position** – Left of title, Right of title, or Above title.
