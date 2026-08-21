@@ -4,7 +4,7 @@ Tags: exam, result, marks, student, marksheet, print, CSV import, GitHub updater
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 8.0
-Stable tag: 4.7.31
+Stable tag: 4.7.32
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -45,6 +45,7 @@ Under Exam Results -> Marksheet Settings you can configure:
 * Tagline (optional) -- a short line shown below the institute name wherever it appears. Leave blank to hide it.
 * Description (optional) -- an additional supporting line shown below the tagline, in a smaller font. Leave blank to hide it.
 * Subject Column Label -- choose "Subject Code" or "Sl. No." for the subject-row column, matching your institute's own terminology. Applied consistently in the admin entry form, the result table, and the printed marksheet.
+* Institute Name Watermark on Printouts -- optional, off by default. Shows a subtle, repeating watermark behind the marks table on the printed marksheet only (not the website display). Uses a dedicated Watermark Text field, or falls back to the Institute Name if left blank.
 * Institute Logo (URL) -- upload via the media library or paste a URL.
 * Logo Width -- in pixels (20-400). Height scales automatically.
 * Logo Position -- Left of title, Right of title, or Above title.
@@ -80,6 +81,9 @@ For very large files (roughly 1,000+ rows), consider splitting into smaller batc
 == Changelog ==
 
 Detailed tracking begins at 4.7.2; earlier versions (4.7.1 and prior) predate this changelog.
+
+= 4.7.32 =
+* Added an optional institute name watermark behind the marks table on printed marksheets, off by default. Also made the table's alternating-row shading semi-transparent so the watermark shows through evenly (negligible visual difference on its own).
 
 = 4.7.31 =
 * Added a "Subject Column Label" setting to choose between "Subject Code" and "Sl. No." -- applied consistently in the admin entry form, results table, and printed marksheet.

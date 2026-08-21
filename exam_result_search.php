@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.31
+ * Version: 4.7.32
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.31' );
+define( 'ERM_VERSION', '4.7.32' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -549,6 +549,33 @@ class ExamResultManager {
         );
     }
 
+    /**
+     * Builds a small, tiled SVG watermark (institute name, low-opacity) as
+     * a CSS-ready data URI, for the printed marksheet's marks table only.
+     * Strictly opt-in: returns '' (no watermark applied at all) unless the
+     * setting is explicitly enabled and there's text to show. Uses
+     * exam_watermark_text if set, otherwise falls back to the Institute
+     * Name already configured for the header, so most admins won't need
+     * to fill in a second field.
+     */
+    private function get_watermark_background_url() {
+        if ( ! get_option( 'exam_enable_watermark', 0 ) ) {
+            return '';
+        }
+        $text = trim( (string) get_option( 'exam_watermark_text', '' ) );
+        if ( '' === $text ) {
+            $text = trim( (string) get_option( 'exam_institute_name', '' ) );
+        }
+        if ( '' === $text ) {
+            return '';
+        }
+        $text = esc_html( strtoupper( $text ) );
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="260" height="36">'
+             . '<text x="0" y="24" font-family="Arial, Helvetica, sans-serif" font-size="12" letter-spacing="1" fill="rgba(100,116,139,0.16)">' . $text . '</text>'
+             . '</svg>';
+        return 'data:image/svg+xml,' . rawurlencode( $svg );
+    }
+
     private function calculate_subject_grade( $percentage ) {
         if ( $percentage >= 90 ) return 'A+';
         if ( $percentage >= 80 ) return 'A';
@@ -817,6 +844,8 @@ class ExamResultManager {
         register_setting( 'exam_result_settings_group', 'exam_max_external', 'absint' );
         register_setting( 'exam_result_settings_group', 'exam_max_practical', 'absint' );
         register_setting( 'exam_result_settings_group', 'exam_subject_label_mode', array( $this, 'sanitize_subject_label_mode' ) );
+        register_setting( 'exam_result_settings_group', 'exam_enable_watermark', array( $this, 'sanitize_checkbox' ) );
+        register_setting( 'exam_result_settings_group', 'exam_watermark_text', 'sanitize_text_field' );
         register_setting( 'exam_result_settings_group', 'exam_delete_data_on_uninstall', array( $this, 'sanitize_checkbox' ) );
     }
 
@@ -915,6 +944,8 @@ class ExamResultManager {
         $tagline_size     = get_option( 'exam_tagline_size', 14 );
         $description_size = get_option( 'exam_description_size', 12 );
         $subject_label_mode = get_option( 'exam_subject_label_mode', 'code' );
+        $enable_watermark = get_option( 'exam_enable_watermark', 0 );
+        $watermark_text = get_option( 'exam_watermark_text', '' );
         ?>
         <div class="wrap">
             <h1><?php _e( 'Marksheet Settings', 'exam-result-manager' ); ?></h1>
@@ -1015,6 +1046,21 @@ class ExamResultManager {
                                 <option value="serial" <?php selected( $subject_label_mode, 'serial' ); ?>><?php _e( 'Sl. No.', 'exam-result-manager' ); ?></option>
                             </select>
                             <p class="description"><?php _e( 'Some institutes use a subject code, others a running serial number. This label is used consistently in the admin entry form, the frontend result table, and the printed marksheet.', 'exam-result-manager' ); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php _e( 'Institute Name Watermark on Printouts', 'exam-result-manager' ); ?></th>
+                        <td>
+                            <label>
+                                <input type="hidden" name="exam_enable_watermark" value="0">
+                                <input type="checkbox" name="exam_enable_watermark" value="1" <?php checked( $enable_watermark, 1 ); ?>>
+                                <?php _e( 'Show a subtle, repeating institute name watermark behind the marks table on printed marksheets.', 'exam-result-manager' ); ?>
+                            </label>
+                            <p class="description"><?php _e( 'Off by default. Applies only to the printed marksheet\'s marks table, not the website display.', 'exam-result-manager' ); ?></p>
+                            <p>
+                                <label for="exam_watermark_text"><?php _e( 'Watermark Text (optional)', 'exam-result-manager' ); ?></label><br>
+                                <input type="text" name="exam_watermark_text" id="exam_watermark_text" value="<?php echo esc_attr( $watermark_text ); ?>" class="regular-text" placeholder="<?php esc_attr_e( 'Leave blank to use the Institute Name above', 'exam-result-manager' ); ?>" />
+                            </p>
                         </td>
                     </tr>
                     <tr>
@@ -1714,6 +1760,7 @@ class ExamResultManager {
         $max_total = $max_internal + $max_external + $max_practical;
         $max_overall = count( $subjects ) * $max_total;
         $overall_percentage = $max_overall > 0 ? round( ( $total / $max_overall ) * 100, 2 ) : 0;
+        $watermark_url = $this->get_watermark_background_url();
 
         ?>
         <!DOCTYPE html>
@@ -1777,8 +1824,14 @@ class ExamResultManager {
                     padding: 10px 8px;
                     border: 1px solid #cbd5e1;
                 }
+                <?php if ( $watermark_url ) : ?>
+                table {
+                    background-image: url("<?php echo $watermark_url; ?>");
+                    background-repeat: repeat;
+                }
+                <?php endif; ?>
                 tr:nth-child(even) {
-                    background: #f8fafc;
+                    background: rgba(248, 250, 252, 0.5);
                 }
                 .total-grade {
                     margin-top: 20px;
@@ -1918,6 +1971,8 @@ function exam_result_manager_uninstall() {
     delete_option( 'exam_max_external' );
     delete_option( 'exam_max_practical' );
     delete_option( 'exam_subject_label_mode' );
+    delete_option( 'exam_enable_watermark' );
+    delete_option( 'exam_watermark_text' );
     delete_option( 'erm_github_update_error' );
     delete_option( 'erm_lookup_key_migrated' );
     delete_option( 'exam_delete_data_on_uninstall' );
