@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.30
+ * Version: 4.7.31
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.30' );
+define( 'ERM_VERSION', '4.7.31' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -514,10 +514,11 @@ class ExamResultManager {
         $max_total = $max_internal + $max_external + $max_practical;
         $percentage = $max_total > 0 ? ( $total / $max_total ) * 100 : 0;
         $grade = $this->calculate_subject_grade( $percentage );
+        $code_labels = $this->get_subject_code_labels();
 
         return '<div class="detailed-subject-row" style="margin-bottom:15px; padding:10px; border:1px solid #ddd; background:#fafafa;">'
              . '<div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">'
-             . '<input type="text" name="subject_code[]" placeholder="' . esc_attr__( 'Code', 'exam-result-manager' ) . '" aria-label="' . esc_attr__( 'Subject Code', 'exam-result-manager' ) . '" value="' . esc_attr( $code ) . '" style="width:80px;">'
+             . '<input type="text" name="subject_code[]" placeholder="' . esc_attr( $code_labels['short'] ) . '" aria-label="' . esc_attr( $code_labels['full'] ) . '" value="' . esc_attr( $code ) . '" style="width:80px;">'
              . '<input type="text" name="subject_name[]" placeholder="' . esc_attr__( 'Subject Name', 'exam-result-manager' ) . '" aria-label="' . esc_attr__( 'Subject Name', 'exam-result-manager' ) . '" value="' . esc_attr( $name ) . '" style="width:150px;">'
              . '<input type="number" name="subject_internal[]" class="internal-marks" placeholder="Int (' . esc_attr( $max_internal ) . ')" aria-label="' . esc_attr( sprintf( __( 'Internal marks, out of %d', 'exam-result-manager' ), $max_internal ) ) . '" value="' . esc_attr( $internal ) . '" style="width:80px;" step="0.01">'
              . '<input type="number" name="subject_external[]" class="external-marks" placeholder="Ext (' . esc_attr( $max_external ) . ')" aria-label="' . esc_attr( sprintf( __( 'External marks, out of %d', 'exam-result-manager' ), $max_external ) ) . '" value="' . esc_attr( $external ) . '" style="width:80px;" step="0.01">'
@@ -526,6 +527,26 @@ class ExamResultManager {
              . '<input type="text" name="subject_grade[]" class="subject-grade" placeholder="Grade" aria-label="' . esc_attr__( 'Subject grade (calculated)', 'exam-result-manager' ) . '" value="' . esc_attr( $grade ) . '" style="width:60px;" readonly>'
              . '<button type="button" class="button remove-detailed-subject" aria-label="' . esc_attr__( 'Remove this subject row', 'exam-result-manager' ) . '">-</button>'
              . '</div></div>';
+    }
+
+    /**
+     * Some institutes use "Subject Code", others use "Sl. No." for the
+     * corresponding column. Returns both a short label (table header,
+     * placeholder) and a fuller one (aria-label) for whichever the admin
+     * has chosen, used consistently in the admin entry form, the frontend
+     * result table, and the printed marksheet.
+     */
+    private function get_subject_code_labels() {
+        if ( 'serial' === get_option( 'exam_subject_label_mode', 'code' ) ) {
+            return array(
+                'short' => __( 'Sl. No.', 'exam-result-manager' ),
+                'full'  => __( 'Serial Number', 'exam-result-manager' ),
+            );
+        }
+        return array(
+            'short' => __( 'Code', 'exam-result-manager' ),
+            'full'  => __( 'Subject Code', 'exam-result-manager' ),
+        );
     }
 
     private function calculate_subject_grade( $percentage ) {
@@ -795,6 +816,7 @@ class ExamResultManager {
         register_setting( 'exam_result_settings_group', 'exam_max_internal', 'absint' );
         register_setting( 'exam_result_settings_group', 'exam_max_external', 'absint' );
         register_setting( 'exam_result_settings_group', 'exam_max_practical', 'absint' );
+        register_setting( 'exam_result_settings_group', 'exam_subject_label_mode', array( $this, 'sanitize_subject_label_mode' ) );
         register_setting( 'exam_result_settings_group', 'exam_delete_data_on_uninstall', array( $this, 'sanitize_checkbox' ) );
     }
 
@@ -836,6 +858,12 @@ class ExamResultManager {
     public function sanitize_align( $value ) {
         $allowed = array( 'left', 'center', 'right' );
         return in_array( $value, $allowed, true ) ? $value : 'left';
+    }
+
+    // Whether the subject-row column is labeled "Subject Code" or "Sl. No."
+    public function sanitize_subject_label_mode( $value ) {
+        $allowed = array( 'code', 'serial' );
+        return in_array( $value, $allowed, true ) ? $value : 'code';
     }
 
     // Title font size (px)
@@ -886,6 +914,7 @@ class ExamResultManager {
         $title_size       = get_option( 'exam_title_size', 24 );
         $tagline_size     = get_option( 'exam_tagline_size', 14 );
         $description_size = get_option( 'exam_description_size', 12 );
+        $subject_label_mode = get_option( 'exam_subject_label_mode', 'code' );
         ?>
         <div class="wrap">
             <h1><?php _e( 'Marksheet Settings', 'exam-result-manager' ); ?></h1>
@@ -976,6 +1005,16 @@ class ExamResultManager {
                         <td>
                             <?php $this->render_institute_header( 'preview' ); ?>
                             <p class="description"><?php _e( 'This preview updates live as you edit the fields above (save to apply on the site).', 'exam-result-manager' ); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="exam_subject_label_mode"><?php _e( 'Subject Column Label', 'exam-result-manager' ); ?></label></th>
+                        <td>
+                            <select name="exam_subject_label_mode" id="exam_subject_label_mode">
+                                <option value="code" <?php selected( $subject_label_mode, 'code' ); ?>><?php _e( 'Subject Code', 'exam-result-manager' ); ?></option>
+                                <option value="serial" <?php selected( $subject_label_mode, 'serial' ); ?>><?php _e( 'Sl. No.', 'exam-result-manager' ); ?></option>
+                            </select>
+                            <p class="description"><?php _e( 'Some institutes use a subject code, others a running serial number. This label is used consistently in the admin entry form, the frontend result table, and the printed marksheet.', 'exam-result-manager' ); ?></p>
                         </td>
                     </tr>
                     <tr>
@@ -1545,7 +1584,7 @@ class ExamResultManager {
                                     <table>
                                         <thead>
                                             <tr>
-                                                <th><?php _e( 'Code', 'exam-result-manager' ); ?></th>
+                                                <th><?php echo esc_html( $this->get_subject_code_labels()['short'] ); ?></th>
                                                 <th><?php _e( 'Subject', 'exam-result-manager' ); ?></th>
                                                 <th><?php _e( 'Internal', 'exam-result-manager' ); ?></th>
                                                 <th><?php _e( 'External', 'exam-result-manager' ); ?></th>
@@ -1790,7 +1829,7 @@ class ExamResultManager {
             <table>
                 <thead>
                     <tr>
-                        <th><?php _e( 'Code', 'exam-result-manager' ); ?></th>
+                        <th><?php echo esc_html( $this->get_subject_code_labels()['short'] ); ?></th>
                         <th><?php _e( 'Subject', 'exam-result-manager' ); ?></th>
                         <th><?php _e( 'Internal', 'exam-result-manager' ); ?></th>
                         <th><?php _e( 'External', 'exam-result-manager' ); ?></th>
@@ -1878,6 +1917,7 @@ function exam_result_manager_uninstall() {
     delete_option( 'exam_max_internal' );
     delete_option( 'exam_max_external' );
     delete_option( 'exam_max_practical' );
+    delete_option( 'exam_subject_label_mode' );
     delete_option( 'erm_github_update_error' );
     delete_option( 'erm_lookup_key_migrated' );
     delete_option( 'exam_delete_data_on_uninstall' );
