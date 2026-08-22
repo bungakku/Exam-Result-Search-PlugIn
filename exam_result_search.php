@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.32
+ * Version: 4.7.33
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.32' );
+define( 'ERM_VERSION', '4.7.33' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -571,7 +571,7 @@ class ExamResultManager {
         }
         $text = esc_html( strtoupper( $text ) );
         $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="260" height="36">'
-             . '<text x="0" y="24" font-family="Arial, Helvetica, sans-serif" font-size="12" letter-spacing="1" fill="rgba(100,116,139,0.16)">' . $text . '</text>'
+             . '<text x="0" y="24" font-family="Arial, Helvetica, sans-serif" font-size="12" letter-spacing="1" fill="rgba(100,116,139,0.22)">' . $text . '</text>'
              . '</svg>';
         return 'data:image/svg+xml,' . rawurlencode( $svg );
     }
@@ -1773,6 +1773,8 @@ class ExamResultManager {
                     margin: 0;
                     padding: 0;
                     box-sizing: border-box;
+                    -webkit-print-color-adjust: exact;
+                    print-color-adjust: exact;
                 }
                 body {
                     font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;

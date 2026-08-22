@@ -4,7 +4,7 @@ Tags: exam, result, marks, student, marksheet, print, CSV import, GitHub updater
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 8.0
-Stable tag: 4.7.32
+Stable tag: 4.7.33
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -81,6 +81,9 @@ For very large files (roughly 1,000+ rows), consider splitting into smaller batc
 == Changelog ==
 
 Detailed tracking begins at 4.7.2; earlier versions (4.7.1 and prior) predate this changelog.
+
+= 4.7.33 =
+* Fixed the print watermark (and existing table-header/summary-box colors) potentially not appearing in print/PDF output -- browsers can suppress background colors/images when printing unless explicitly forced. Also raised watermark opacity slightly for more reliable visibility.
 
 = 4.7.32 =
 * Added an optional institute name watermark behind the marks table on printed marksheets, off by default. Also made the table's alternating-row shading semi-transparent so the watermark shows through evenly (negligible visual difference on its own).
