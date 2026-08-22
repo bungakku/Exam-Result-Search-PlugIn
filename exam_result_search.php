@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.33
+ * Version: 4.7.34
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.33' );
+define( 'ERM_VERSION', '4.7.34' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -557,6 +557,11 @@ class ExamResultManager {
      * exam_watermark_text if set, otherwise falls back to the Institute
      * Name already configured for the header, so most admins won't need
      * to fill in a second field.
+     *
+     * Opacity, font size, and spacing (repeat density) are all admin-
+     * configurable. The tile's width/height are computed from the text and
+     * chosen font size (rather than a fixed size) so longer institute
+     * names don't get clipped within their own repeating tile.
      */
     private function get_watermark_background_url() {
         if ( ! get_option( 'exam_enable_watermark', 0 ) ) {
@@ -570,8 +575,21 @@ class ExamResultManager {
             return '';
         }
         $text = esc_html( strtoupper( $text ) );
-        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="260" height="36">'
-             . '<text x="0" y="24" font-family="Arial, Helvetica, sans-serif" font-size="12" letter-spacing="1" fill="rgba(100,116,139,0.22)">' . $text . '</text>'
+
+        $font_size = get_option( 'exam_watermark_font_size', 12 );
+        $opacity   = get_option( 'exam_watermark_opacity', 22 ) / 100;
+        $spacing   = get_option( 'exam_watermark_spacing', 40 );
+
+        // No server-side text measurement available, so estimate width from
+        // character count -- a generous per-character multiplier for a
+        // typical sans-serif font, erring wide rather than risking clipping.
+        $estimated_text_width = strlen( $text ) * $font_size * 0.62;
+        $tile_width  = max( 60, (int) round( $estimated_text_width + $spacing ) );
+        $tile_height = max( 20, (int) round( ( $font_size * 2 ) + ( $spacing / 2 ) ) );
+        $text_y      = (int) round( ( $tile_height / 2 ) + ( $font_size / 3 ) );
+
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $tile_width . '" height="' . $tile_height . '">'
+             . '<text x="0" y="' . $text_y . '" font-family="Arial, Helvetica, sans-serif" font-size="' . intval( $font_size ) . '" letter-spacing="1" fill="rgba(100,116,139,' . esc_attr( $opacity ) . ')">' . $text . '</text>'
              . '</svg>';
         return 'data:image/svg+xml,' . rawurlencode( $svg );
     }
@@ -846,6 +864,9 @@ class ExamResultManager {
         register_setting( 'exam_result_settings_group', 'exam_subject_label_mode', array( $this, 'sanitize_subject_label_mode' ) );
         register_setting( 'exam_result_settings_group', 'exam_enable_watermark', array( $this, 'sanitize_checkbox' ) );
         register_setting( 'exam_result_settings_group', 'exam_watermark_text', 'sanitize_text_field' );
+        register_setting( 'exam_result_settings_group', 'exam_watermark_opacity', array( $this, 'sanitize_watermark_opacity' ) );
+        register_setting( 'exam_result_settings_group', 'exam_watermark_font_size', array( $this, 'sanitize_watermark_font_size' ) );
+        register_setting( 'exam_result_settings_group', 'exam_watermark_spacing', array( $this, 'sanitize_watermark_spacing' ) );
         register_setting( 'exam_result_settings_group', 'exam_delete_data_on_uninstall', array( $this, 'sanitize_checkbox' ) );
     }
 
@@ -893,6 +914,42 @@ class ExamResultManager {
     public function sanitize_subject_label_mode( $value ) {
         $allowed = array( 'code', 'serial' );
         return in_array( $value, $allowed, true ) ? $value : 'code';
+    }
+
+    // Watermark opacity, as a percentage (5-60)
+    public function sanitize_watermark_opacity( $value ) {
+        $value = absint( $value );
+        if ( $value < 5 ) {
+            $value = 5;
+        }
+        if ( $value > 60 ) {
+            $value = 60;
+        }
+        return $value;
+    }
+
+    // Watermark font size (px)
+    public function sanitize_watermark_font_size( $value ) {
+        $value = absint( $value );
+        if ( $value < 8 ) {
+            $value = 8;
+        }
+        if ( $value > 30 ) {
+            $value = 30;
+        }
+        return $value;
+    }
+
+    // Watermark spacing/density (px) -- lower is denser, higher is sparser
+    public function sanitize_watermark_spacing( $value ) {
+        $value = absint( $value );
+        if ( $value < 10 ) {
+            $value = 10;
+        }
+        if ( $value > 150 ) {
+            $value = 150;
+        }
+        return $value;
     }
 
     // Title font size (px)
@@ -946,6 +1003,9 @@ class ExamResultManager {
         $subject_label_mode = get_option( 'exam_subject_label_mode', 'code' );
         $enable_watermark = get_option( 'exam_enable_watermark', 0 );
         $watermark_text = get_option( 'exam_watermark_text', '' );
+        $watermark_opacity = get_option( 'exam_watermark_opacity', 22 );
+        $watermark_font_size = get_option( 'exam_watermark_font_size', 12 );
+        $watermark_spacing = get_option( 'exam_watermark_spacing', 40 );
         ?>
         <div class="wrap">
             <h1><?php _e( 'Marksheet Settings', 'exam-result-manager' ); ?></h1>
@@ -1060,6 +1120,20 @@ class ExamResultManager {
                             <p>
                                 <label for="exam_watermark_text"><?php _e( 'Watermark Text (optional)', 'exam-result-manager' ); ?></label><br>
                                 <input type="text" name="exam_watermark_text" id="exam_watermark_text" value="<?php echo esc_attr( $watermark_text ); ?>" class="regular-text" placeholder="<?php esc_attr_e( 'Leave blank to use the Institute Name above', 'exam-result-manager' ); ?>" />
+                            </p>
+                            <p>
+                                <label for="exam_watermark_opacity"><?php _e( 'Watermark Opacity', 'exam-result-manager' ); ?></label><br>
+                                <input type="number" name="exam_watermark_opacity" id="exam_watermark_opacity" value="<?php echo esc_attr( $watermark_opacity ); ?>" min="5" max="60" step="1" style="width:90px;"> %
+                                <span class="description"><?php _e( 'Higher = more visible.', 'exam-result-manager' ); ?></span>
+                            </p>
+                            <p>
+                                <label for="exam_watermark_font_size"><?php _e( 'Watermark Text Size', 'exam-result-manager' ); ?></label><br>
+                                <input type="number" name="exam_watermark_font_size" id="exam_watermark_font_size" value="<?php echo esc_attr( $watermark_font_size ); ?>" min="8" max="30" step="1" style="width:90px;"> px
+                            </p>
+                            <p>
+                                <label for="exam_watermark_spacing"><?php _e( 'Watermark Spacing', 'exam-result-manager' ); ?></label><br>
+                                <input type="number" name="exam_watermark_spacing" id="exam_watermark_spacing" value="<?php echo esc_attr( $watermark_spacing ); ?>" min="10" max="150" step="1" style="width:90px;"> px
+                                <span class="description"><?php _e( 'Lower = denser repeating pattern, higher = more spaced out.', 'exam-result-manager' ); ?></span>
                             </p>
                         </td>
                     </tr>
@@ -1975,6 +2049,9 @@ function exam_result_manager_uninstall() {
     delete_option( 'exam_subject_label_mode' );
     delete_option( 'exam_enable_watermark' );
     delete_option( 'exam_watermark_text' );
+    delete_option( 'exam_watermark_opacity' );
+    delete_option( 'exam_watermark_font_size' );
+    delete_option( 'exam_watermark_spacing' );
     delete_option( 'erm_github_update_error' );
     delete_option( 'erm_lookup_key_migrated' );
     delete_option( 'exam_delete_data_on_uninstall' );

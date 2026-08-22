@@ -4,7 +4,7 @@ Tags: exam, result, marks, student, marksheet, print, CSV import, GitHub updater
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 8.0
-Stable tag: 4.7.33
+Stable tag: 4.7.34
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -45,7 +45,7 @@ Under Exam Results -> Marksheet Settings you can configure:
 * Tagline (optional) -- a short line shown below the institute name wherever it appears. Leave blank to hide it.
 * Description (optional) -- an additional supporting line shown below the tagline, in a smaller font. Leave blank to hide it.
 * Subject Column Label -- choose "Subject Code" or "Sl. No." for the subject-row column, matching your institute's own terminology. Applied consistently in the admin entry form, the result table, and the printed marksheet.
-* Institute Name Watermark on Printouts -- optional, off by default. Shows a subtle, repeating watermark behind the marks table on the printed marksheet only (not the website display). Uses a dedicated Watermark Text field, or falls back to the Institute Name if left blank.
+* Institute Name Watermark on Printouts -- optional, off by default. Shows a subtle, repeating watermark behind the marks table on the printed marksheet only (not the website display). Uses a dedicated Watermark Text field, or falls back to the Institute Name if left blank. Opacity, text size, and spacing (repeat density) are all adjustable.
 * Institute Logo (URL) -- upload via the media library or paste a URL.
 * Logo Width -- in pixels (20-400). Height scales automatically.
 * Logo Position -- Left of title, Right of title, or Above title.
@@ -81,6 +81,9 @@ For very large files (roughly 1,000+ rows), consider splitting into smaller batc
 == Changelog ==
 
 Detailed tracking begins at 4.7.2; earlier versions (4.7.1 and prior) predate this changelog.
+
+= 4.7.34 =
+* Added opacity, text size, and spacing (repeat density) controls for the print watermark. Tile size is now computed from the text/font size so longer institute names don't get clipped.
 
 = 4.7.33 =
 * Fixed the print watermark (and existing table-header/summary-box colors) potentially not appearing in print/PDF output -- browsers can suppress background colors/images when printing unless explicitly forced. Also raised watermark opacity slightly for more reliable visibility.
