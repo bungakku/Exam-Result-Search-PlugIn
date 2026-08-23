@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.35
+ * Version: 4.7.36
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.35' );
+define( 'ERM_VERSION', '4.7.36' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -957,8 +957,8 @@ class ExamResultManager {
     // Watermark vertical spacing/density (px) -- independent of horizontal
     public function sanitize_watermark_vertical_spacing( $value ) {
         $value = absint( $value );
-        if ( $value < 5 ) {
-            $value = 5;
+        if ( $value < 1 ) {
+            $value = 1;
         }
         if ( $value > 100 ) {
             $value = 100;
@@ -1152,7 +1152,7 @@ class ExamResultManager {
                             </p>
                             <p>
                                 <label for="exam_watermark_vertical_spacing"><?php _e( 'Watermark Vertical Spacing', 'exam-result-manager' ); ?></label><br>
-                                <input type="number" name="exam_watermark_vertical_spacing" id="exam_watermark_vertical_spacing" value="<?php echo esc_attr( $watermark_vertical_spacing ); ?>" min="5" max="100" step="1" style="width:90px;"> px
+                                <input type="number" name="exam_watermark_vertical_spacing" id="exam_watermark_vertical_spacing" value="<?php echo esc_attr( $watermark_vertical_spacing ); ?>" min="1" max="100" step="1" style="width:90px;"> px
                                 <span class="description"><?php _e( 'Lower = denser row-to-row repetition, higher = more spaced out. Independent of horizontal spacing.', 'exam-result-manager' ); ?></span>
                             </p>
                         </td>
