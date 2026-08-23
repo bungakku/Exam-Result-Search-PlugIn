@@ -4,7 +4,7 @@ Tags: exam, result, marks, student, marksheet, print, CSV import, GitHub updater
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 8.0
-Stable tag: 4.7.36
+Stable tag: 4.7.37
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -14,6 +14,7 @@ Manage student exam results with subject-wise marks, automatic grading, CSV impo
 
 Exam Result Manager allows you to:
 
+* Choose a theme color -- applied to borders, headings, buttons, and table headers on both the website and printed marksheets. A complementary lighter shade is generated automatically for gradients on the website.
 * Store student exam results with detailed subject-wise marks (Internal, External, Practical).
 * Automatically calculate subject totals, overall total, and grades.
 * Display results on the frontend using a shortcode `[exam_result_search]` with search by Roll No, Class, Semester, and Year.
@@ -81,6 +82,9 @@ For very large files (roughly 1,000+ rows), consider splitting into smaller batc
 == Changelog ==
 
 Detailed tracking begins at 4.7.2; earlier versions (4.7.1 and prior) predate this changelog.
+
+= 4.7.37 =
+* Added a Theme Color setting (free-form color picker), replacing the fixed blue used for borders, headings, buttons, and table headers on the website and printed marksheets. Grade colors, table-header cell borders, and the print watermark are intentionally unaffected.
 
 = 4.7.36 =
 * Lowered the minimum allowed Watermark Vertical Spacing from 5px to 1px, for a denser row-to-row repeat when wanted.

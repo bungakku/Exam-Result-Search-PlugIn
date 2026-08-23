@@ -5,7 +5,7 @@
 **Requires at least:** 5.0  
 **Tested up to:** 6.7  
 **Requires PHP:** 8.0  
-**Stable tag:** 4.7.36  
+**Stable tag:** 4.7.37  
 **License:** GPLv2 or later  
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html  
 
@@ -15,6 +15,7 @@ A complete WordPress plugin to manage student exam results with subject-wise mar
 
 Exam Result Manager allows you to:
 
+- **Choose a theme color** – applied to borders, headings, buttons, and table headers on both the website and printed marksheets. A complementary lighter shade is generated automatically for gradients on the website.
 - Store student exam results with detailed subject-wise marks (Internal, External, Practical).
 - Automatically calculate subject totals, overall total, and grades.
 - Display results on the frontend using a shortcode `[exam_result_search]` with search by Roll No, Class, Semester, and Year.

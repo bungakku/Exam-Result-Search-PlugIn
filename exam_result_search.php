@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.36
+ * Version: 4.7.37
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.36' );
+define( 'ERM_VERSION', '4.7.37' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -734,6 +734,31 @@ class ExamResultManager {
     }
 
     /**
+     * Lightens a hex color toward white by the given fraction (0-1). Used
+     * to derive a second gradient stop from the admin's single chosen
+     * theme color, so buttons/table headers on the frontend keep their
+     * existing two-tone gradient look instead of flattening to one flat
+     * color. Falls back to the plugin's original default accent if the
+     * input isn't a valid hex color.
+     */
+    private function lighten_color( $hex, $percent = 0.25 ) {
+        $hex = ltrim( (string) $hex, '#' );
+        if ( 3 === strlen( $hex ) ) {
+            $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+        }
+        if ( 6 !== strlen( $hex ) || ! ctype_xdigit( $hex ) ) {
+            return '#0ea5e9';
+        }
+        $r = hexdec( substr( $hex, 0, 2 ) );
+        $g = hexdec( substr( $hex, 2, 2 ) );
+        $b = hexdec( substr( $hex, 4, 2 ) );
+        $r = min( 255, (int) round( $r + ( 255 - $r ) * $percent ) );
+        $g = min( 255, (int) round( $g + ( 255 - $g ) * $percent ) );
+        $b = min( 255, (int) round( $b + ( 255 - $b ) * $percent ) );
+        return sprintf( '#%02x%02x%02x', $r, $g, $b );
+    }
+
+    /**
      * Builds the composite value stored in _erm_lookup_key (Roll No + Class +
      * Semester + Year), used so the public search can match with a single
      * meta_query clause. Normalized (trimmed, lowercased) so the fast path
@@ -849,6 +874,7 @@ class ExamResultManager {
 
     public function register_settings() {
         register_setting( 'exam_result_settings_group', 'exam_institute_name', 'sanitize_text_field' );
+        register_setting( 'exam_result_settings_group', 'exam_theme_color', array( $this, 'sanitize_theme_color' ) );
         register_setting( 'exam_result_settings_group', 'exam_institute_logo', 'esc_url_raw' );
         register_setting( 'exam_result_settings_group', 'exam_institute_tagline', 'sanitize_text_field' );
         register_setting( 'exam_result_settings_group', 'exam_institute_description', 'sanitize_text_field' );
@@ -877,6 +903,13 @@ class ExamResultManager {
     // name so unchecking reliably saves as off, not just "unchanged".
     public function sanitize_checkbox( $value ) {
         return ( '1' === $value ) ? 1 : 0;
+    }
+
+    // Theme color: WP core's own hex-color validator, with a safe fallback
+    // to the plugin's original default blue if empty/invalid.
+    public function sanitize_theme_color( $value ) {
+        $sanitized = sanitize_hex_color( $value );
+        return $sanitized ? $sanitized : '#2563eb';
     }
 
     // Keep logo width within a sane, printable range (px)
@@ -1007,6 +1040,7 @@ class ExamResultManager {
         $logo_width       = get_option( 'exam_logo_width', 120 );
         $logo_gap         = get_option( 'exam_logo_title_gap', 20 );
         $institute        = get_option( 'exam_institute_name', '' );
+        $theme_color      = get_option( 'exam_theme_color', '#2563eb' );
         $tagline          = get_option( 'exam_institute_tagline', '' );
         $description      = get_option( 'exam_institute_description', '' );
         $layout           = get_option( 'exam_header_layout', 'logo_left' );
@@ -1027,6 +1061,13 @@ class ExamResultManager {
             <form method="post" action="options.php">
                 <?php settings_fields( 'exam_result_settings_group' ); ?>
                 <table class="form-table">
+                    <tr>
+                        <th scope="row"><label for="exam_theme_color"><?php _e( 'Theme Color', 'exam-result-manager' ); ?></label></th>
+                        <td>
+                            <input type="text" name="exam_theme_color" id="exam_theme_color" value="<?php echo esc_attr( $theme_color ); ?>" class="erm-color-picker" data-default-color="#2563eb" />
+                            <p class="description"><?php _e( 'Used for borders, headings, buttons, and table headers on both the website and printed marksheets. A complementary lighter shade is generated automatically for gradients on the website.', 'exam-result-manager' ); ?></p>
+                        </td>
+                    </tr>
                     <tr>
                         <th scope="row"><label for="exam_institute_name"><?php _e( 'Institute Name', 'exam-result-manager' ); ?></label></th>
                         <td><input type="text" name="exam_institute_name" id="exam_institute_name" value="<?php echo esc_attr( $institute ); ?>" class="regular-text" /></td>
@@ -1186,6 +1227,8 @@ class ExamResultManager {
         </div>
         <script>
         jQuery(document).ready(function($) {
+            $('.erm-color-picker').wpColorPicker();
+
             $('#upload_logo_button').click(function(e) {
                 e.preventDefault();
                 var custom_uploader = wp.media({
@@ -1339,7 +1382,7 @@ class ExamResultManager {
         }
 
         if ( 'print' === $context ) {
-            $wrapper_style .= ' margin-bottom:30px; border-bottom:2px solid #2563eb; padding-bottom:20px;';
+            $wrapper_style .= ' margin-bottom:30px; border-bottom:2px solid var(--primary); padding-bottom:20px;';
         } elseif ( 'frontend' === $context ) {
             $wrapper_style .= ' margin-bottom:18px;';
         }
@@ -1635,6 +1678,17 @@ class ExamResultManager {
                 'ajaxurl'    => admin_url( 'admin-ajax.php' ),
                 'print_nonce'=> wp_create_nonce( 'print_marksheet_nonce' ),
             ) );
+
+            // Only override the stylesheet's default colors if the admin
+            // has actually chosen something different -- preserves the
+            // exact original hand-picked blue/cyan gradient pairing when
+            // the theme color has never been changed, rather than running
+            // it through the (necessarily approximate) lighten algorithm.
+            $theme_color = get_option( 'exam_theme_color', '#2563eb' );
+            if ( '#2563eb' !== strtolower( $theme_color ) ) {
+                $accent_color = $this->lighten_color( $theme_color, 0.25 );
+                wp_add_inline_style( 'exam-result-style', ':root{--primary:' . esc_attr( $theme_color ) . ';--accent:' . esc_attr( $accent_color ) . ';}' );
+            }
         }
     }
 
@@ -1855,6 +1909,7 @@ class ExamResultManager {
         $max_overall = count( $subjects ) * $max_total;
         $overall_percentage = $max_overall > 0 ? round( ( $total / $max_overall ) * 100, 2 ) : 0;
         $watermark_url = $this->get_watermark_background_url();
+        $theme_color = get_option( 'exam_theme_color', '#2563eb' );
 
         ?>
         <!DOCTYPE html>
@@ -1863,6 +1918,9 @@ class ExamResultManager {
             <meta charset="UTF-8">
             <title><?php _e( 'Marksheet', 'exam-result-manager' ); ?></title>
             <style>
+                :root {
+                    --primary: <?php echo esc_html( $theme_color ); ?>;
+                }
                 * {
                     margin: 0;
                     padding: 0;
@@ -1893,7 +1951,7 @@ class ExamResultManager {
                     background: #f8fafc;
                     padding: 15px 20px;
                     margin: 20px 0;
-                    border-left: 5px solid #2563eb;
+                    border-left: 5px solid var(--primary);
                     display: flex;
                     flex-wrap: wrap;
                     gap: 20px;
@@ -1910,7 +1968,7 @@ class ExamResultManager {
                     font-size: 14px;
                 }
                 th {
-                    background: #2563eb;
+                    background: var(--primary);
                     color: white;
                     padding: 12px 8px;
                     border: 1px solid #334155;
@@ -1934,7 +1992,7 @@ class ExamResultManager {
                     padding: 15px;
                     background: #f1f5f9;
                     text-align: right;
-                    border-top: 2px solid #2563eb;
+                    border-top: 2px solid var(--primary);
                 }
                 .total-grade p {
                     margin: 5px 0;
@@ -2026,6 +2084,8 @@ class ExamResultManager {
     public function enqueue_admin_scripts() {
         wp_enqueue_script( 'jquery' );
         wp_enqueue_media();
+        wp_enqueue_style( 'wp-color-picker' );
+        wp_enqueue_script( 'wp-color-picker' );
     }
 }
 
@@ -2053,6 +2113,7 @@ function exam_result_manager_uninstall() {
         wp_delete_post( $post_id, true );
     }
     delete_option( 'exam_institute_name' );
+    delete_option( 'exam_theme_color' );
     delete_option( 'exam_institute_logo' );
     delete_option( 'exam_institute_tagline' );
     delete_option( 'exam_institute_description' );
