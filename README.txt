@@ -4,7 +4,7 @@ Tags: exam, result, marks, student, marksheet, print, CSV import, GitHub updater
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 8.0
-Stable tag: 4.7.37
+Stable tag: 4.7.38
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,9 @@ For very large files (roughly 1,000+ rows), consider splitting into smaller batc
 == Changelog ==
 
 Detailed tracking begins at 4.7.2; earlier versions (4.7.1 and prior) predate this changelog.
+
+= 4.7.38 =
+* Fixed low watermark spacing values (1-5px) producing little to no visible difference. Horizontal spacing's minimum was still floored at 10px (only vertical had been lowered previously); separately, both tile-size formulas had oversized internal safety floors/baselines that could mask small spacing changes for typical watermark text. Both are now tuned to be properly responsive across their full range.
 
 = 4.7.37 =
 * Added a Theme Color setting (free-form color picker), replacing the fixed blue used for borders, headings, buttons, and table headers on the website and printed marksheets. Grade colors, table-header cell borders, and the print watermark are intentionally unaffected.

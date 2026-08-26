@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.37
+ * Version: 4.7.38
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.37' );
+define( 'ERM_VERSION', '4.7.38' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -584,9 +584,12 @@ class ExamResultManager {
         // No server-side text measurement available, so estimate width from
         // character count -- a generous per-character multiplier for a
         // typical sans-serif font, erring wide rather than risking clipping.
+        // Floors are kept just large enough to avoid a degenerate/clipped
+        // tile, not larger -- an oversized floor or baseline would swallow
+        // small spacing changes before they ever reach the visible output.
         $estimated_text_width = strlen( $text ) * $font_size * 0.62;
-        $tile_width  = max( 60, (int) round( $estimated_text_width + $spacing ) );
-        $tile_height = max( 20, (int) round( ( $font_size * 2 ) + $vertical_spacing ) );
+        $tile_width  = max( 40, (int) round( $estimated_text_width + $spacing ) );
+        $tile_height = max( 15, (int) round( ( $font_size * 1.3 ) + $vertical_spacing ) );
         $text_y      = (int) round( ( $tile_height / 2 ) + ( $font_size / 3 ) );
 
         $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $tile_width . '" height="' . $tile_height . '">'
@@ -978,8 +981,8 @@ class ExamResultManager {
     // Watermark horizontal spacing/density (px) -- lower is denser, higher is sparser
     public function sanitize_watermark_spacing( $value ) {
         $value = absint( $value );
-        if ( $value < 10 ) {
-            $value = 10;
+        if ( $value < 1 ) {
+            $value = 1;
         }
         if ( $value > 150 ) {
             $value = 150;
@@ -1188,7 +1191,7 @@ class ExamResultManager {
                             </p>
                             <p>
                                 <label for="exam_watermark_spacing"><?php _e( 'Watermark Horizontal Spacing', 'exam-result-manager' ); ?></label><br>
-                                <input type="number" name="exam_watermark_spacing" id="exam_watermark_spacing" value="<?php echo esc_attr( $watermark_spacing ); ?>" min="10" max="150" step="1" style="width:90px;"> px
+                                <input type="number" name="exam_watermark_spacing" id="exam_watermark_spacing" value="<?php echo esc_attr( $watermark_spacing ); ?>" min="1" max="150" step="1" style="width:90px;"> px
                                 <span class="description"><?php _e( 'Lower = denser side-to-side repetition, higher = more spaced out.', 'exam-result-manager' ); ?></span>
                             </p>
                             <p>
