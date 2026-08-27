@@ -5,7 +5,7 @@
 **Requires at least:** 5.0  
 **Tested up to:** 6.7  
 **Requires PHP:** 8.0  
-**Stable tag:** 4.7.38  
+**Stable tag:** 4.7.39  
 **License:** GPLv2 or later  
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html  
 
@@ -47,7 +47,7 @@ Under **Exam Results** → **Marksheet Settings** you can configure:
 - **Tagline (optional)** – a short line shown below the institute name wherever it appears. Leave blank to hide it.
 - **Description (optional)** – an additional supporting line shown below the tagline, in a smaller font. Leave blank to hide it.
 - **Subject Column Label** – choose "Subject Code" or "Sl. No." for the subject-row column, matching your institute's own terminology. Applied consistently in the admin entry form, the result table, and the printed marksheet.
-- **Institute Name Watermark on Printouts** – optional, off by default. Shows a subtle, repeating watermark behind the marks table on the printed marksheet only (not the website display). Uses a dedicated Watermark Text field, or falls back to the Institute Name if left blank. Opacity, text size, and horizontal/vertical spacing (repeat density, independently adjustable) are all configurable.
+- **Institute Name Watermark on Printouts** – optional, off by default. Shows a subtle, repeating watermark behind the marks table on the printed marksheet only (not the website display). **Watermark Source** lets you choose Text (a dedicated Watermark Text field, or falls back to the Institute Name if left blank) or Institute Logo (tiles the logo set above, sized via Watermark Logo Size; a transparent PNG logo is recommended, since a non-transparent one will show a visible tile edge). Opacity and horizontal/vertical spacing (repeat density, independently adjustable) are shared between both sources.
 - **Institute Logo (URL)** – upload via the media library or paste a URL.
 - **Logo Width** – in pixels (20–400). Height scales automatically.
 - **Logo Position** – Left of title, Right of title, or Above title.

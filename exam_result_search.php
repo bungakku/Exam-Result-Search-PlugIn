@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.38
+ * Version: 4.7.39
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.38' );
+define( 'ERM_VERSION', '4.7.39' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -550,23 +550,70 @@ class ExamResultManager {
     }
 
     /**
-     * Builds a small, tiled SVG watermark (institute name, low-opacity) as
-     * a CSS-ready data URI, for the printed marksheet's marks table only.
-     * Strictly opt-in: returns '' (no watermark applied at all) unless the
-     * setting is explicitly enabled and there's text to show. Uses
-     * exam_watermark_text if set, otherwise falls back to the Institute
-     * Name already configured for the header, so most admins won't need
-     * to fill in a second field.
+     * Builds a small, tiled SVG watermark as a CSS-ready data URI, for the
+     * printed marksheet's marks table only. Strictly opt-in: returns ''
+     * (no watermark applied at all) unless the setting is explicitly
+     * enabled and there's something to show.
      *
-     * Opacity, font size, and spacing (repeat density) are all admin-
-     * configurable. The tile's width/height are computed from the text and
-     * chosen font size (rather than a fixed size) so longer institute
-     * names don't get clipped within their own repeating tile.
+     * Branches early on exam_watermark_source:
+     * - 'logo': tiles the configured Institute Logo via an SVG <image>
+     *   element. Requires exam_institute_logo to be non-empty; if it's
+     *   empty this gracefully returns '' (no watermark, not an error) --
+     *   same "quietly opt out" behavior as the text path having no text.
+     * - 'text' (default): unchanged from prior versions -- institute name
+     *   or custom text, tile sized from estimated text width.
+     *
+     * Both paths reuse the same opacity and horizontal/vertical spacing
+     * settings rather than duplicating controls. Tile size is always
+     * computed from the actual content/settings (never fixed) so low
+     * spacing/size values stay visibly responsive.
      */
     private function get_watermark_background_url() {
         if ( ! get_option( 'exam_enable_watermark', 0 ) ) {
             return '';
         }
+
+        $opacity          = get_option( 'exam_watermark_opacity', 22 ) / 100;
+        $spacing          = get_option( 'exam_watermark_spacing', 40 );
+        $vertical_spacing = get_option( 'exam_watermark_vertical_spacing', 20 );
+        $source           = get_option( 'exam_watermark_source', 'text' );
+
+        if ( 'logo' === $source ) {
+            $logo_url = trim( (string) get_option( 'exam_institute_logo', '' ) );
+            if ( '' === $logo_url ) {
+                return '';
+            }
+            $logo_size = get_option( 'exam_watermark_logo_size', 50 );
+
+            // No server-side image dimensions available (no image
+            // processing, deliberately out of scope), so the logo is
+            // placed in a square logo_size x logo_size bounding box and
+            // scaled to fit it via preserveAspectRatio -- matches how the
+            // visible header logo already only constrains width/height
+            // via CSS without knowing the source aspect ratio server-side.
+            // Floor matches the true minimum possible value (logo size's own
+            // minimum of 15 + spacing's own minimum of 1 = 16) rather than an
+            // arbitrary round number -- an oversized floor here would repeat
+            // the exact v4.7.38 bug class (low spacing settings silently
+            // producing no visible tile-size change).
+            $tile_width  = max( 16, (int) round( $logo_size + $spacing ) );
+            $tile_height = max( 16, (int) round( $logo_size + $vertical_spacing ) );
+            $img_x       = (int) round( ( $tile_width - $logo_size ) / 2 );
+            $img_y       = (int) round( ( $tile_height - $logo_size ) / 2 );
+
+            // esc_url() first (validates/sanitizes the URL), esc_attr()
+            // after (escapes & etc. for safe use as an XML attribute value)
+            // -- same double-escaping pattern used for the visible <img>
+            // src in render_institute_header().
+            $safe_logo_url = esc_attr( esc_url( $logo_url ) );
+
+            $svg = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="' . $tile_width . '" height="' . $tile_height . '">'
+                 . '<image x="' . $img_x . '" y="' . $img_y . '" width="' . intval( $logo_size ) . '" height="' . intval( $logo_size ) . '" href="' . $safe_logo_url . '" xlink:href="' . $safe_logo_url . '" preserveAspectRatio="xMidYMid meet" opacity="' . esc_attr( $opacity ) . '"/>'
+                 . '</svg>';
+            return 'data:image/svg+xml,' . rawurlencode( $svg );
+        }
+
+        // Text path (unchanged behavior).
         $text = trim( (string) get_option( 'exam_watermark_text', '' ) );
         if ( '' === $text ) {
             $text = trim( (string) get_option( 'exam_institute_name', '' ) );
@@ -577,9 +624,6 @@ class ExamResultManager {
         $text = esc_html( strtoupper( $text ) );
 
         $font_size = get_option( 'exam_watermark_font_size', 12 );
-        $opacity   = get_option( 'exam_watermark_opacity', 22 ) / 100;
-        $spacing   = get_option( 'exam_watermark_spacing', 40 );
-        $vertical_spacing = get_option( 'exam_watermark_vertical_spacing', 20 );
 
         // No server-side text measurement available, so estimate width from
         // character count -- a generous per-character multiplier for a
@@ -893,9 +937,11 @@ class ExamResultManager {
         register_setting( 'exam_result_settings_group', 'exam_max_practical', 'absint' );
         register_setting( 'exam_result_settings_group', 'exam_subject_label_mode', array( $this, 'sanitize_subject_label_mode' ) );
         register_setting( 'exam_result_settings_group', 'exam_enable_watermark', array( $this, 'sanitize_checkbox' ) );
+        register_setting( 'exam_result_settings_group', 'exam_watermark_source', array( $this, 'sanitize_watermark_source' ) );
         register_setting( 'exam_result_settings_group', 'exam_watermark_text', 'sanitize_text_field' );
         register_setting( 'exam_result_settings_group', 'exam_watermark_opacity', array( $this, 'sanitize_watermark_opacity' ) );
         register_setting( 'exam_result_settings_group', 'exam_watermark_font_size', array( $this, 'sanitize_watermark_font_size' ) );
+        register_setting( 'exam_result_settings_group', 'exam_watermark_logo_size', array( $this, 'sanitize_watermark_logo_size' ) );
         register_setting( 'exam_result_settings_group', 'exam_watermark_spacing', array( $this, 'sanitize_watermark_spacing' ) );
         register_setting( 'exam_result_settings_group', 'exam_watermark_vertical_spacing', array( $this, 'sanitize_watermark_vertical_spacing' ) );
         register_setting( 'exam_result_settings_group', 'exam_delete_data_on_uninstall', array( $this, 'sanitize_checkbox' ) );
@@ -952,6 +998,24 @@ class ExamResultManager {
     public function sanitize_subject_label_mode( $value ) {
         $allowed = array( 'code', 'serial' );
         return in_array( $value, $allowed, true ) ? $value : 'code';
+    }
+
+    // Whether the print watermark is built from text or the institute logo
+    public function sanitize_watermark_source( $value ) {
+        $allowed = array( 'text', 'logo' );
+        return in_array( $value, $allowed, true ) ? $value : 'text';
+    }
+
+    // Watermark logo size (px, square bounding box) -- only used when source is "logo"
+    public function sanitize_watermark_logo_size( $value ) {
+        $value = absint( $value );
+        if ( $value < 15 ) {
+            $value = 15;
+        }
+        if ( $value > 150 ) {
+            $value = 150;
+        }
+        return $value;
     }
 
     // Watermark opacity, as a percentage (5-60)
@@ -1053,9 +1117,11 @@ class ExamResultManager {
         $description_size = get_option( 'exam_description_size', 12 );
         $subject_label_mode = get_option( 'exam_subject_label_mode', 'code' );
         $enable_watermark = get_option( 'exam_enable_watermark', 0 );
+        $watermark_source = get_option( 'exam_watermark_source', 'text' );
         $watermark_text = get_option( 'exam_watermark_text', '' );
         $watermark_opacity = get_option( 'exam_watermark_opacity', 22 );
         $watermark_font_size = get_option( 'exam_watermark_font_size', 12 );
+        $watermark_logo_size = get_option( 'exam_watermark_logo_size', 50 );
         $watermark_spacing = get_option( 'exam_watermark_spacing', 40 );
         $watermark_vertical_spacing = get_option( 'exam_watermark_vertical_spacing', 20 );
         ?>
@@ -1177,17 +1243,32 @@ class ExamResultManager {
                             </label>
                             <p class="description"><?php _e( 'Off by default. Applies only to the printed marksheet\'s marks table, not the website display.', 'exam-result-manager' ); ?></p>
                             <p>
+                                <label for="exam_watermark_source"><?php _e( 'Watermark Source', 'exam-result-manager' ); ?></label><br>
+                                <select name="exam_watermark_source" id="exam_watermark_source">
+                                    <option value="text" <?php selected( $watermark_source, 'text' ); ?>><?php _e( 'Text', 'exam-result-manager' ); ?></option>
+                                    <option value="logo" <?php selected( $watermark_source, 'logo' ); ?>><?php _e( 'Institute Logo', 'exam-result-manager' ); ?></option>
+                                </select>
+                                <p class="description"><?php _e( 'Repeat text or the Institute Logo (set above) as the watermark. If "Institute Logo" is chosen but no logo is uploaded, no watermark is shown.', 'exam-result-manager' ); ?></p>
+                            </p>
+                            <p>
                                 <label for="exam_watermark_text"><?php _e( 'Watermark Text (optional)', 'exam-result-manager' ); ?></label><br>
                                 <input type="text" name="exam_watermark_text" id="exam_watermark_text" value="<?php echo esc_attr( $watermark_text ); ?>" class="regular-text" placeholder="<?php esc_attr_e( 'Leave blank to use the Institute Name above', 'exam-result-manager' ); ?>" />
+                                <p class="description"><?php _e( 'Only used when Watermark Source is set to Text.', 'exam-result-manager' ); ?></p>
                             </p>
                             <p>
                                 <label for="exam_watermark_opacity"><?php _e( 'Watermark Opacity', 'exam-result-manager' ); ?></label><br>
                                 <input type="number" name="exam_watermark_opacity" id="exam_watermark_opacity" value="<?php echo esc_attr( $watermark_opacity ); ?>" min="5" max="60" step="1" style="width:90px;"> %
-                                <span class="description"><?php _e( 'Higher = more visible.', 'exam-result-manager' ); ?></span>
+                                <span class="description"><?php _e( 'Higher = more visible. Applies to both Text and Institute Logo.', 'exam-result-manager' ); ?></span>
                             </p>
                             <p>
                                 <label for="exam_watermark_font_size"><?php _e( 'Watermark Text Size', 'exam-result-manager' ); ?></label><br>
                                 <input type="number" name="exam_watermark_font_size" id="exam_watermark_font_size" value="<?php echo esc_attr( $watermark_font_size ); ?>" min="8" max="30" step="1" style="width:90px;"> px
+                                <p class="description"><?php _e( 'Only used when Watermark Source is set to Text.', 'exam-result-manager' ); ?></p>
+                            </p>
+                            <p>
+                                <label for="exam_watermark_logo_size"><?php _e( 'Watermark Logo Size', 'exam-result-manager' ); ?></label><br>
+                                <input type="number" name="exam_watermark_logo_size" id="exam_watermark_logo_size" value="<?php echo esc_attr( $watermark_logo_size ); ?>" min="15" max="150" step="1" style="width:90px;"> px
+                                <p class="description"><?php _e( 'Only used when Watermark Source is set to Institute Logo. Note: a non-transparent logo (e.g. with a white background) will show a visible tile edge when repeated -- for a clean result, use a transparent PNG.', 'exam-result-manager' ); ?></p>
                             </p>
                             <p>
                                 <label for="exam_watermark_spacing"><?php _e( 'Watermark Horizontal Spacing', 'exam-result-manager' ); ?></label><br>
@@ -2132,9 +2213,11 @@ function exam_result_manager_uninstall() {
     delete_option( 'exam_max_practical' );
     delete_option( 'exam_subject_label_mode' );
     delete_option( 'exam_enable_watermark' );
+    delete_option( 'exam_watermark_source' );
     delete_option( 'exam_watermark_text' );
     delete_option( 'exam_watermark_opacity' );
     delete_option( 'exam_watermark_font_size' );
+    delete_option( 'exam_watermark_logo_size' );
     delete_option( 'exam_watermark_spacing' );
     delete_option( 'exam_watermark_vertical_spacing' );
     delete_option( 'erm_github_update_error' );
