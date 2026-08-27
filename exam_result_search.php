@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.39
+ * Version: 4.7.40
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.39' );
+define( 'ERM_VERSION', '4.7.40' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -550,56 +550,65 @@ class ExamResultManager {
     }
 
     /**
-     * Builds a small, tiled SVG watermark as a CSS-ready data URI, for the
-     * printed marksheet's marks table only. Strictly opt-in: returns ''
-     * (no watermark applied at all) unless the setting is explicitly
-     * enabled and there's something to show.
+     * Builds a print-watermark background image as a CSS-ready data URI,
+     * scoped to the printed marksheet's marks table only. Strictly opt-in:
+     * returns '' (no watermark applied at all) unless the setting is
+     * explicitly enabled and there's something to show.
      *
      * Branches early on exam_watermark_source:
-     * - 'logo': tiles the configured Institute Logo via an SVG <image>
-     *   element. Requires exam_institute_logo to be non-empty; if it's
-     *   empty this gracefully returns '' (no watermark, not an error) --
-     *   same "quietly opt out" behavior as the text path having no text.
-     * - 'text' (default): unchanged from prior versions -- institute name
-     *   or custom text, tile sized from estimated text width.
+     * - 'logo': a single (non-repeating) rendering of the configured
+     *   Institute Logo. Unlike the text path, this is never tiled -- it's
+     *   one logo, centered, auto-scaled by the browser (via CSS
+     *   background-size: contain, applied by the caller/ajax_print_marksheet()
+     *   alongside this URL) to fit within the table's actual box, whatever
+     *   size that turns out to be. exam_watermark_logo_size controls what
+     *   fraction of that auto-fit box the logo itself occupies (100 =
+     *   edge-to-edge within the fit area, smaller = a centered inset), by
+     *   scaling an <image> inside a fixed square SVG canvas -- since the
+     *   canvas is square and CSS then scales the whole canvas uniformly
+     *   (same factor on both axes) to fit the table, nothing inside it
+     *   is ever stretched or distorted, regardless of the logo's own
+     *   aspect ratio or the table's. Requires exam_institute_logo to be
+     *   non-empty; if it's empty this gracefully returns '' (no watermark,
+     *   not an error) -- same "quietly opt out" behavior as the text path
+     *   having no text.
+     * - 'text' (default): unchanged from prior versions -- a tiled,
+     *   repeating pattern of the institute name or custom text, sized from
+     *   estimated text width, with independently configurable horizontal/
+     *   vertical repeat spacing.
      *
-     * Both paths reuse the same opacity and horizontal/vertical spacing
-     * settings rather than duplicating controls. Tile size is always
-     * computed from the actual content/settings (never fixed) so low
-     * spacing/size values stay visibly responsive.
+     * Both paths reuse the same opacity setting. Horizontal/vertical
+     * spacing only apply to the (tiled) text path -- a single logo has
+     * nothing to space out between repeats.
      */
     private function get_watermark_background_url() {
         if ( ! get_option( 'exam_enable_watermark', 0 ) ) {
             return '';
         }
 
-        $opacity          = get_option( 'exam_watermark_opacity', 22 ) / 100;
-        $spacing          = get_option( 'exam_watermark_spacing', 40 );
-        $vertical_spacing = get_option( 'exam_watermark_vertical_spacing', 20 );
-        $source           = get_option( 'exam_watermark_source', 'text' );
+        $opacity = get_option( 'exam_watermark_opacity', 22 ) / 100;
+        $source  = get_option( 'exam_watermark_source', 'text' );
 
         if ( 'logo' === $source ) {
             $logo_url = trim( (string) get_option( 'exam_institute_logo', '' ) );
             if ( '' === $logo_url ) {
                 return '';
             }
-            $logo_size = get_option( 'exam_watermark_logo_size', 50 );
+            $logo_size = get_option( 'exam_watermark_logo_size', 100 ); // % of the auto-fit box the logo itself fills
 
-            // No server-side image dimensions available (no image
-            // processing, deliberately out of scope), so the logo is
-            // placed in a square logo_size x logo_size bounding box and
-            // scaled to fit it via preserveAspectRatio -- matches how the
-            // visible header logo already only constrains width/height
-            // via CSS without knowing the source aspect ratio server-side.
-            // Floor matches the true minimum possible value (logo size's own
-            // minimum of 15 + spacing's own minimum of 1 = 16) rather than an
-            // arbitrary round number -- an oversized floor here would repeat
-            // the exact v4.7.38 bug class (low spacing settings silently
-            // producing no visible tile-size change).
-            $tile_width  = max( 16, (int) round( $logo_size + $spacing ) );
-            $tile_height = max( 16, (int) round( $logo_size + $vertical_spacing ) );
-            $img_x       = (int) round( ( $tile_width - $logo_size ) / 2 );
-            $img_y       = (int) round( ( $tile_height - $logo_size ) / 2 );
+            // Fixed square canvas (arbitrary unit size -- CSS background-size:
+            // contain rescales the whole thing to fit the table, so the
+            // canvas's absolute size here doesn't matter, only its being
+            // square). The <image> is inset within it according to
+            // $logo_size%, then preserveAspectRatio keeps the logo's own
+            // proportions correct within that inset box. Because the outer
+            // canvas is square and gets scaled by the SAME factor on both
+            // axes by "contain", this inset/proportion is preserved exactly
+            // however the final box ends up being stretched to fit a given
+            // table's width/height -- no distortion at any table size.
+            $canvas    = 200;
+            $img_size  = (int) round( $canvas * ( $logo_size / 100 ) );
+            $img_pos   = (int) round( ( $canvas - $img_size ) / 2 );
 
             // esc_url() first (validates/sanitizes the URL), esc_attr()
             // after (escapes & etc. for safe use as an XML attribute value)
@@ -607,13 +616,15 @@ class ExamResultManager {
             // src in render_institute_header().
             $safe_logo_url = esc_attr( esc_url( $logo_url ) );
 
-            $svg = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="' . $tile_width . '" height="' . $tile_height . '">'
-                 . '<image x="' . $img_x . '" y="' . $img_y . '" width="' . intval( $logo_size ) . '" height="' . intval( $logo_size ) . '" href="' . $safe_logo_url . '" xlink:href="' . $safe_logo_url . '" preserveAspectRatio="xMidYMid meet" opacity="' . esc_attr( $opacity ) . '"/>'
+            $svg = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="' . $canvas . '" height="' . $canvas . '" viewBox="0 0 ' . $canvas . ' ' . $canvas . '">'
+                 . '<image x="' . $img_pos . '" y="' . $img_pos . '" width="' . $img_size . '" height="' . $img_size . '" href="' . $safe_logo_url . '" xlink:href="' . $safe_logo_url . '" preserveAspectRatio="xMidYMid meet" opacity="' . esc_attr( $opacity ) . '"/>'
                  . '</svg>';
             return 'data:image/svg+xml,' . rawurlencode( $svg );
         }
 
         // Text path (unchanged behavior).
+        $spacing          = get_option( 'exam_watermark_spacing', 40 );
+        $vertical_spacing = get_option( 'exam_watermark_vertical_spacing', 20 );
         $text = trim( (string) get_option( 'exam_watermark_text', '' ) );
         if ( '' === $text ) {
             $text = trim( (string) get_option( 'exam_institute_name', '' ) );
@@ -640,6 +651,27 @@ class ExamResultManager {
              . '<text x="0" y="' . $text_y . '" font-family="Arial, Helvetica, sans-serif" font-size="' . intval( $font_size ) . '" letter-spacing="1" fill="rgba(100,116,139,' . esc_attr( $opacity ) . ')">' . $text . '</text>'
              . '</svg>';
         return 'data:image/svg+xml,' . rawurlencode( $svg );
+    }
+
+    /**
+     * Wraps get_watermark_background_url() with the CSS declarations
+     * needed to actually display it correctly, since the two sources need
+     * different background- rules: the logo source builds one single,
+     * non-repeating image (already scaled/inset internally) that must be
+     * displayed with background-repeat:no-repeat + background-size:contain
+     * so it appears once, centered, auto-fit to the table's box -- NOT
+     * tiled. The text source keeps its original tiled/repeating display.
+     * Returns '' (nothing rendered) if there's no watermark to show.
+     */
+    private function get_watermark_background_style() {
+        $url = $this->get_watermark_background_url();
+        if ( '' === $url ) {
+            return '';
+        }
+        if ( 'logo' === get_option( 'exam_watermark_source', 'text' ) ) {
+            return 'background-image: url("' . $url . '"); background-repeat: no-repeat; background-position: center center; background-size: contain;';
+        }
+        return 'background-image: url("' . $url . '"); background-repeat: repeat;';
     }
 
     private function calculate_subject_grade( $percentage ) {
@@ -1006,14 +1038,16 @@ class ExamResultManager {
         return in_array( $value, $allowed, true ) ? $value : 'text';
     }
 
-    // Watermark logo size (px, square bounding box) -- only used when source is "logo"
+    // Watermark logo size, as a percentage of the auto-fit area it occupies
+    // (10-100) -- only used when Watermark Source is "logo". 100 = fills
+    // the fit area edge-to-edge; lower values inset it, centered.
     public function sanitize_watermark_logo_size( $value ) {
         $value = absint( $value );
-        if ( $value < 15 ) {
-            $value = 15;
+        if ( $value < 10 ) {
+            $value = 10;
         }
-        if ( $value > 150 ) {
-            $value = 150;
+        if ( $value > 100 ) {
+            $value = 100;
         }
         return $value;
     }
@@ -1121,7 +1155,7 @@ class ExamResultManager {
         $watermark_text = get_option( 'exam_watermark_text', '' );
         $watermark_opacity = get_option( 'exam_watermark_opacity', 22 );
         $watermark_font_size = get_option( 'exam_watermark_font_size', 12 );
-        $watermark_logo_size = get_option( 'exam_watermark_logo_size', 50 );
+        $watermark_logo_size = get_option( 'exam_watermark_logo_size', 100 );
         $watermark_spacing = get_option( 'exam_watermark_spacing', 40 );
         $watermark_vertical_spacing = get_option( 'exam_watermark_vertical_spacing', 20 );
         ?>
@@ -1248,7 +1282,7 @@ class ExamResultManager {
                                     <option value="text" <?php selected( $watermark_source, 'text' ); ?>><?php _e( 'Text', 'exam-result-manager' ); ?></option>
                                     <option value="logo" <?php selected( $watermark_source, 'logo' ); ?>><?php _e( 'Institute Logo', 'exam-result-manager' ); ?></option>
                                 </select>
-                                <p class="description"><?php _e( 'Repeat text or the Institute Logo (set above) as the watermark. If "Institute Logo" is chosen but no logo is uploaded, no watermark is shown.', 'exam-result-manager' ); ?></p>
+                                <p class="description"><?php _e( 'Text repeats in a tiled pattern. Institute Logo (set above) shows once, centered, automatically scaled to fit the marks table. If "Institute Logo" is chosen but no logo is uploaded, no watermark is shown.', 'exam-result-manager' ); ?></p>
                             </p>
                             <p>
                                 <label for="exam_watermark_text"><?php _e( 'Watermark Text (optional)', 'exam-result-manager' ); ?></label><br>
@@ -1267,18 +1301,18 @@ class ExamResultManager {
                             </p>
                             <p>
                                 <label for="exam_watermark_logo_size"><?php _e( 'Watermark Logo Size', 'exam-result-manager' ); ?></label><br>
-                                <input type="number" name="exam_watermark_logo_size" id="exam_watermark_logo_size" value="<?php echo esc_attr( $watermark_logo_size ); ?>" min="15" max="150" step="1" style="width:90px;"> px
-                                <p class="description"><?php _e( 'Only used when Watermark Source is set to Institute Logo. Note: a non-transparent logo (e.g. with a white background) will show a visible tile edge when repeated -- for a clean result, use a transparent PNG.', 'exam-result-manager' ); ?></p>
+                                <input type="number" name="exam_watermark_logo_size" id="exam_watermark_logo_size" value="<?php echo esc_attr( $watermark_logo_size ); ?>" min="10" max="100" step="1" style="width:90px;"> %
+                                <p class="description"><?php _e( 'Only used when Watermark Source is set to Institute Logo. The logo appears once (not repeated), centered and automatically scaled to fit within the marks table without distortion or cropping. 100% fills that fit area edge-to-edge; lower values shrink it, still centered. Note: a non-transparent logo (e.g. with a white background) will appear as a solid block rather than a subtle watermark -- for a clean result, use a transparent PNG.', 'exam-result-manager' ); ?></p>
                             </p>
                             <p>
                                 <label for="exam_watermark_spacing"><?php _e( 'Watermark Horizontal Spacing', 'exam-result-manager' ); ?></label><br>
                                 <input type="number" name="exam_watermark_spacing" id="exam_watermark_spacing" value="<?php echo esc_attr( $watermark_spacing ); ?>" min="1" max="150" step="1" style="width:90px;"> px
-                                <span class="description"><?php _e( 'Lower = denser side-to-side repetition, higher = more spaced out.', 'exam-result-manager' ); ?></span>
+                                <span class="description"><?php _e( 'Only used when Watermark Source is set to Text. Lower = denser side-to-side repetition, higher = more spaced out.', 'exam-result-manager' ); ?></span>
                             </p>
                             <p>
                                 <label for="exam_watermark_vertical_spacing"><?php _e( 'Watermark Vertical Spacing', 'exam-result-manager' ); ?></label><br>
                                 <input type="number" name="exam_watermark_vertical_spacing" id="exam_watermark_vertical_spacing" value="<?php echo esc_attr( $watermark_vertical_spacing ); ?>" min="1" max="100" step="1" style="width:90px;"> px
-                                <span class="description"><?php _e( 'Lower = denser row-to-row repetition, higher = more spaced out. Independent of horizontal spacing.', 'exam-result-manager' ); ?></span>
+                                <span class="description"><?php _e( 'Only used when Watermark Source is set to Text. Lower = denser row-to-row repetition, higher = more spaced out. Independent of horizontal spacing.', 'exam-result-manager' ); ?></span>
                             </p>
                         </td>
                     </tr>
@@ -1992,7 +2026,7 @@ class ExamResultManager {
         $max_total = $max_internal + $max_external + $max_practical;
         $max_overall = count( $subjects ) * $max_total;
         $overall_percentage = $max_overall > 0 ? round( ( $total / $max_overall ) * 100, 2 ) : 0;
-        $watermark_url = $this->get_watermark_background_url();
+        $watermark_css = $this->get_watermark_background_style();
         $theme_color = get_option( 'exam_theme_color', '#2563eb' );
 
         ?>
@@ -2062,10 +2096,9 @@ class ExamResultManager {
                     padding: 10px 8px;
                     border: 1px solid #cbd5e1;
                 }
-                <?php if ( $watermark_url ) : ?>
+                <?php if ( $watermark_css ) : ?>
                 table {
-                    background-image: url("<?php echo $watermark_url; ?>");
-                    background-repeat: repeat;
+                    <?php echo $watermark_css; ?>
                 }
                 <?php endif; ?>
                 tr:nth-child(even) {
