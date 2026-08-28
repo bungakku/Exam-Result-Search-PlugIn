@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.44
+ * Version: 4.7.45
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.44' );
+define( 'ERM_VERSION', '4.7.45' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -760,39 +760,93 @@ class ExamResultManager {
     }
 
     /**
+     * Whether $value already names a calendar month -- a full English name
+     * or its common 3-letter abbreviation, case-insensitive. Only the
+     * 3-letter forms are listed since each is a substring of its own full
+     * name too (e.g. "mar" matches both "Mar" and "March"), so this list
+     * doubles as coverage for both without listing everything twice.
+     *
+     * This exists because a month's own name doesn't contain the literal
+     * word "month" -- so the plain keyword check in format_period_label()
+     * wouldn't catch "January" as self-describing on its own; this fills
+     * that specific gap for the realistic Monthly convention of admins
+     * typing an actual month name as the value.
+     */
+    private function value_names_a_month( $value ) {
+        $months = array( 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec' );
+        foreach ( $months as $month ) {
+            if ( false !== stripos( $value, $month ) ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Builds the printed "<value>, <year>" period label for the marksheet
      * subtitle, adapting to whichever terminology the admin actually typed
      * into the (free-text) Semester/Term/Unit/Monthly field.
      *
-     * There's no separate "which category is this" field -- it's one text
-     * value -- so this infers intent from the value's own wording: if it
-     * already names its unit ("Term 2", "Unit 3", "Monthly Test 1", etc.,
-     * matched case-insensitively) it's used exactly as typed, since
-     * appending anything would be redundant ("Term 2 Semester" reads
-     * wrong). If it doesn't contain any of those words -- e.g. a bare
-     * "1st", "2nd", "II", which was the only supported style before this
-     * field covered more than semesters -- "Semester" is appended after
-     * it, exactly matching every prior version's printed output for that
-     * same input. Existing semester-only institutes therefore see no
-     * change on their printouts; only newly-adopted Term/Unit/Monthly
-     * wording benefits from this.
+     * Two layers, in order:
      *
-     * Limitation: a bare value that doesn't name its own category (e.g. a
-     * month name like "January" with no literal word "month" in it) can't
-     * be distinguished from a bare semester number by text alone, so it
-     * still falls back to the "Semester" convention. Typing the category
-     * word into the value itself (e.g. "January" -> "Month: January", or
-     * just "Term 2" instead of "2") gets the intended wording exactly.
+     * 1. exam_period_type = 'auto' (the default, and the only behavior
+     *    prior to this setting existing): infer from the value's own
+     *    wording. If it already names its unit ("Term 2", "Unit 3",
+     *    "Monthly Test 1", or an actual month name/abbreviation like
+     *    "January" -- matched case-insensitively) it's used exactly as
+     *    typed, since appending anything would be redundant. If it
+     *    doesn't contain any of those -- e.g. a bare "1st", "2nd", "II",
+     *    the only style supported before this field covered more than
+     *    semesters -- "Semester" is appended after it, exactly matching
+     *    every prior version's printed output for that same input.
+     *
+     * 2. exam_period_type set to a specific category: for institutes that
+     *    always use one convention and enter genuinely ambiguous bare
+     *    values auto-detect can't otherwise resolve (e.g. a plain "2"
+     *    meant as Term 2, indistinguishable by text alone from a bare
+     *    semester number) -- trusts the site's explicit declaration
+     *    instead of guessing. Still avoids a literal duplicate word if the
+     *    value already happens to say it (e.g. "1st Semester" with type
+     *    Semester stays "1st Semester", not "...Semester Semester").
+     *    Semester keeps the plugin's original suffix convention ("1st" ->
+     *    "1st Semester"); Term/Unit use the more natural prefix convention
+     *    ("2" -> "Term 2", "3" -> "Unit 3"); Monthly values are typically
+     *    already self-descriptive (a month name, or "Monthly Test 1") so
+     *    no word is forced onto a bare value there.
+     *
+     * Existing semester-only institutes see no change to their printouts
+     * either way, since the default is 'auto' and a bare "1st"-style value
+     * resolves identically under both layers.
      */
     private function format_period_label( $value ) {
         $value = trim( (string) $value );
         if ( '' === $value ) {
             return $value;
         }
+
+        $period_type = get_option( 'exam_period_type', 'auto' );
+
+        if ( 'semester' === $period_type ) {
+            return ( false !== stripos( $value, 'semester' ) ) ? $value : $value . ' ' . __( 'Semester', 'exam-result-manager' );
+        }
+        if ( 'term' === $period_type ) {
+            return ( false !== stripos( $value, 'term' ) ) ? $value : __( 'Term', 'exam-result-manager' ) . ' ' . $value;
+        }
+        if ( 'unit' === $period_type ) {
+            return ( false !== stripos( $value, 'unit' ) ) ? $value : __( 'Unit', 'exam-result-manager' ) . ' ' . $value;
+        }
+        if ( 'monthly' === $period_type ) {
+            return $value; // Monthly values are typically self-descriptive already; no word is forced.
+        }
+
+        // Auto-detect (default).
         foreach ( array( 'semester', 'term', 'unit', 'month' ) as $unit_word ) {
             if ( false !== stripos( $value, $unit_word ) ) {
                 return $value; // Already self-describing -- use exactly as typed.
             }
+        }
+        if ( $this->value_names_a_month( $value ) ) {
+            return $value;
         }
         return $value . ' ' . __( 'Semester', 'exam-result-manager' );
     }
@@ -1091,6 +1145,7 @@ class ExamResultManager {
         register_setting( 'exam_result_settings_group', 'exam_max_external', 'absint' );
         register_setting( 'exam_result_settings_group', 'exam_max_practical', 'absint' );
         register_setting( 'exam_result_settings_group', 'exam_subject_label_mode', array( $this, 'sanitize_subject_label_mode' ) );
+        register_setting( 'exam_result_settings_group', 'exam_period_type', array( $this, 'sanitize_period_type' ) );
         register_setting( 'exam_result_settings_group', 'exam_enable_watermark', array( $this, 'sanitize_checkbox' ) );
         register_setting( 'exam_result_settings_group', 'exam_watermark_source', array( $this, 'sanitize_watermark_source' ) );
         register_setting( 'exam_result_settings_group', 'exam_watermark_text', 'sanitize_text_field' );
@@ -1153,6 +1208,15 @@ class ExamResultManager {
     public function sanitize_subject_label_mode( $value ) {
         $allowed = array( 'code', 'serial' );
         return in_array( $value, $allowed, true ) ? $value : 'code';
+    }
+
+    // Marksheet subtitle wording for the Semester/Term/Unit/Monthly value:
+    // 'auto' infers from the value's own wording (default, matches every
+    // version before this setting existed); a specific category forces
+    // that convention instead, for bare values auto-detect can't resolve.
+    public function sanitize_period_type( $value ) {
+        $allowed = array( 'auto', 'semester', 'term', 'unit', 'monthly' );
+        return in_array( $value, $allowed, true ) ? $value : 'auto';
     }
 
     // Whether the print watermark is built from text or the institute logo
@@ -1273,6 +1337,7 @@ class ExamResultManager {
         $tagline_size     = get_option( 'exam_tagline_size', 14 );
         $description_size = get_option( 'exam_description_size', 12 );
         $subject_label_mode = get_option( 'exam_subject_label_mode', 'code' );
+        $period_type = get_option( 'exam_period_type', 'auto' );
         $enable_watermark = get_option( 'exam_enable_watermark', 0 );
         $watermark_source = get_option( 'exam_watermark_source', 'text' );
         $watermark_text = get_option( 'exam_watermark_text', '' );
@@ -1388,6 +1453,19 @@ class ExamResultManager {
                                 <option value="serial" <?php selected( $subject_label_mode, 'serial' ); ?>><?php _e( 'Sl. No.', 'exam-result-manager' ); ?></option>
                             </select>
                             <p class="description"><?php _e( 'Some institutes use a subject code, others a running serial number. This label is used consistently in the admin entry form, the frontend result table, and the printed marksheet.', 'exam-result-manager' ); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="exam_period_type"><?php _e( 'Marksheet Period Wording', 'exam-result-manager' ); ?></label></th>
+                        <td>
+                            <select name="exam_period_type" id="exam_period_type">
+                                <option value="auto" <?php selected( $period_type, 'auto' ); ?>><?php _e( 'Auto-detect from value (default)', 'exam-result-manager' ); ?></option>
+                                <option value="semester" <?php selected( $period_type, 'semester' ); ?>><?php _e( 'Always Semester', 'exam-result-manager' ); ?></option>
+                                <option value="term" <?php selected( $period_type, 'term' ); ?>><?php _e( 'Always Term', 'exam-result-manager' ); ?></option>
+                                <option value="unit" <?php selected( $period_type, 'unit' ); ?>><?php _e( 'Always Unit', 'exam-result-manager' ); ?></option>
+                                <option value="monthly" <?php selected( $period_type, 'monthly' ); ?>><?php _e( 'Always Monthly', 'exam-result-manager' ); ?></option>
+                            </select>
+                            <p class="description"><?php _e( 'Controls how the Semester/Term/Unit/Monthly value is worded on the printed marksheet subtitle. Auto-detect (default) uses the value\'s own wording when present (e.g. "Term 2" prints as-is, "January" is recognized as a month) and falls back to appending "Semester" for a bare value with no recognizable wording (e.g. "1st" prints as "1st Semester") -- matching every version before this setting existed. Choose a specific option only if your institute always uses one convention and enters bare values (e.g. a plain "2" meant as Term 2) that Auto-detect cannot otherwise tell apart from a semester number.', 'exam-result-manager' ); ?></p>
                         </td>
                     </tr>
                     <tr>
@@ -2388,6 +2466,7 @@ function exam_result_manager_uninstall() {
     delete_option( 'exam_max_external' );
     delete_option( 'exam_max_practical' );
     delete_option( 'exam_subject_label_mode' );
+    delete_option( 'exam_period_type' );
     delete_option( 'exam_enable_watermark' );
     delete_option( 'exam_watermark_source' );
     delete_option( 'exam_watermark_text' );

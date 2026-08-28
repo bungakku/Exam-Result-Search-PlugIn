@@ -5,7 +5,7 @@
 **Requires at least:** 5.0  
 **Tested up to:** 6.7  
 **Requires PHP:** 8.0  
-**Stable tag:** 4.7.44  
+**Stable tag:** 4.7.45  
 **License:** GPLv2 or later  
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html  
 
@@ -47,6 +47,7 @@ Under **Exam Results** → **Marksheet Settings** you can configure:
 - **Tagline (optional)** – a short line shown below the institute name wherever it appears. Leave blank to hide it.
 - **Description (optional)** – an additional supporting line shown below the tagline, in a smaller font. Leave blank to hide it.
 - **Subject Column Label** – choose "Subject Code" or "Sl. No." for the subject-row column, matching your institute's own terminology. Applied consistently in the admin entry form, the result table, and the printed marksheet.
+- **Marksheet Period Wording** – controls how the Semester/Term/Unit/Monthly value is worded on the printed marksheet subtitle. Auto-detect (default) reads the value's own wording when present (e.g. "Term 2" prints as-is, "January" is recognized as a month) and only appends "Semester" for a bare value with no recognizable wording (e.g. "1st" → "1st Semester"). Choose "Always Semester/Term/Unit/Monthly" instead if your institute always uses one convention and enters bare values (e.g. a plain "2" meant as Term 2) that Auto-detect can't otherwise tell apart from a semester number.
 - **Institute Name Watermark on Printouts** – optional, off by default. Shows a subtle watermark behind the marks table on the printed marksheet only (not the website display). **Watermark Source** lets you choose Text (repeats in a tiled pattern; uses a dedicated Watermark Text field, or falls back to the Institute Name if left blank) or Institute Logo (appears once, centered, automatically scaled to fit the marks table without distortion — not tiled). **Watermark Opacity** applies to both. **Watermark Logo Size** (a percentage of the auto-fit area) and **Watermark Text Size**/spacing are source-specific. A transparent PNG logo is recommended for the logo watermark, since a non-transparent one will appear as a solid block rather than a subtle watermark.
 - **Institute Logo (URL)** – upload via the media library or paste a URL.
 - **Logo Width** – in pixels (20–400). Height scales automatically.
