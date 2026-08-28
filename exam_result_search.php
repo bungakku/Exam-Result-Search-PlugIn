@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.41
+ * Version: 4.7.42
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.41' );
+define( 'ERM_VERSION', '4.7.42' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -581,6 +581,82 @@ class ExamResultManager {
      * spacing only apply to the (tiled) text path -- a single logo has
      * nothing to space out between repeats.
      */
+    /**
+     * Returns the institute logo file's own bytes as a base64 data: URI,
+     * for embedding inside the print watermark SVG.
+     *
+     * An SVG used as a CSS background-image renders in a browser-enforced
+     * restricted context in which an embedded <image> is not permitted to
+     * fetch a *separate* external resource -- this is a deliberate
+     * cross-origin/privacy restriction in how browsers handle "CSS images"
+     * (of which an SVG background is one), not a bug specific to one
+     * browser. That's why referencing the logo by its plain https:// URL
+     * inside the watermark SVG rendered nothing (or a broken-image
+     * placeholder) regardless of sizing/positioning fixes: the reference
+     * was never allowed to load in the first place. Embedding the logo's
+     * own bytes directly as a nested data: URI leaves no external
+     * reference to block.
+     *
+     * Tries a direct filesystem read first (fast, no network) when the
+     * logo lives in this site's own uploads directory; falls back to an
+     * HTTP fetch for a logo hosted elsewhere. Result is cached in a
+     * transient keyed by the logo URL, so this only costs a disk/network
+     * read once per URL rather than on every marksheet print -- uploading
+     * a new logo naturally busts the cache since it gets a new URL.
+     *
+     * Returns '' (not an error) if the file can't be read/fetched or is
+     * implausibly large, so the caller can fall back to "no watermark"
+     * rather than a broken image.
+     */
+    private function get_logo_data_uri( $logo_url ) {
+        $cache_key = 'erm_logo_datauri_' . md5( $logo_url );
+        $cached = get_transient( $cache_key );
+        if ( false !== $cached ) {
+            return $cached; // May be '' (cached failure) or a real data URI.
+        }
+
+        $max_bytes = 2 * 1024 * 1024; // 2MB safety cap -- typical logos are far smaller.
+        $data = false;
+        $mime = '';
+
+        // Fast path: logo lives in this site's own uploads directory --
+        // read straight from disk, no network round trip needed.
+        $upload_dir = wp_upload_dir();
+        if ( ! empty( $upload_dir['baseurl'] ) && 0 === strpos( $logo_url, $upload_dir['baseurl'] ) ) {
+            $relative  = substr( $logo_url, strlen( $upload_dir['baseurl'] ) );
+            $file_path = $upload_dir['basedir'] . $relative;
+            if ( file_exists( $file_path ) && filesize( $file_path ) <= $max_bytes ) {
+                $data     = file_get_contents( $file_path );
+                $filetype = wp_check_filetype( $file_path );
+                $mime     = ! empty( $filetype['type'] ) ? $filetype['type'] : '';
+            }
+        }
+
+        // Fallback: fetch over HTTP -- covers an externally-hosted logo, or
+        // a local path that didn't resolve above for any reason.
+        if ( false === $data ) {
+            $response = wp_remote_get( $logo_url, array( 'timeout' => 8 ) );
+            if ( ! is_wp_error( $response ) && 200 === (int) wp_remote_retrieve_response_code( $response ) ) {
+                $body = wp_remote_retrieve_body( $response );
+                if ( '' !== $body && strlen( $body ) <= $max_bytes ) {
+                    $data = $body;
+                    $mime = wp_remote_retrieve_header( $response, 'content-type' );
+                }
+            }
+        }
+
+        if ( false === $data || empty( $mime ) ) {
+            // Cache the failure too, briefly -- avoids re-hitting a slow or
+            // broken URL on every single marksheet print in the meantime.
+            set_transient( $cache_key, '', HOUR_IN_SECONDS );
+            return '';
+        }
+
+        $result = 'data:' . $mime . ';base64,' . base64_encode( $data );
+        set_transient( $cache_key, $result, DAY_IN_SECONDS );
+        return $result;
+    }
+
     private function get_watermark_background_url() {
         if ( ! get_option( 'exam_enable_watermark', 0 ) ) {
             return '';
@@ -592,6 +668,13 @@ class ExamResultManager {
         if ( 'logo' === $source ) {
             $logo_url = trim( (string) get_option( 'exam_institute_logo', '' ) );
             if ( '' === $logo_url ) {
+                return '';
+            }
+            $logo_data_uri = $this->get_logo_data_uri( $logo_url );
+            if ( '' === $logo_data_uri ) {
+                // Logo couldn't be read/fetched (e.g. unreachable URL) --
+                // graceful no-op, same as the "no logo configured" case,
+                // rather than a broken image showing in the watermark.
                 return '';
             }
             $logo_size = get_option( 'exam_watermark_logo_size', 100 ); // % of the auto-fit box the logo itself fills
@@ -610,14 +693,16 @@ class ExamResultManager {
             $img_size  = (int) round( $canvas * ( $logo_size / 100 ) );
             $img_pos   = (int) round( ( $canvas - $img_size ) / 2 );
 
-            // esc_url() first (validates/sanitizes the URL), esc_attr()
-            // after (escapes & etc. for safe use as an XML attribute value)
-            // -- same double-escaping pattern used for the visible <img>
-            // src in render_institute_header().
-            $safe_logo_url = esc_attr( esc_url( $logo_url ) );
+            // The href value is now the logo's own embedded data: URI (see
+            // get_logo_data_uri()), not its external URL -- esc_url() is
+            // deliberately NOT used here, since WordPress's allowed-protocol
+            // list for esc_url() does not include the "data" scheme by
+            // default and would strip it. esc_attr() alone is sufficient
+            // and correct for placing it inside an XML attribute value.
+            $safe_logo_href = esc_attr( $logo_data_uri );
 
             $svg = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="' . $canvas . '" height="' . $canvas . '" viewBox="0 0 ' . $canvas . ' ' . $canvas . '">'
-                 . '<image x="' . $img_pos . '" y="' . $img_pos . '" width="' . $img_size . '" height="' . $img_size . '" href="' . $safe_logo_url . '" xlink:href="' . $safe_logo_url . '" preserveAspectRatio="xMidYMid meet" opacity="' . esc_attr( $opacity ) . '"/>'
+                 . '<image x="' . $img_pos . '" y="' . $img_pos . '" width="' . $img_size . '" height="' . $img_size . '" href="' . $safe_logo_href . '" xlink:href="' . $safe_logo_href . '" preserveAspectRatio="xMidYMid meet" opacity="' . esc_attr( $opacity ) . '"/>'
                  . '</svg>';
             return 'data:image/svg+xml,' . rawurlencode( $svg );
         }

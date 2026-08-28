@@ -4,7 +4,7 @@ Tags: exam, result, marks, student, marksheet, print, CSV import, GitHub updater
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 8.0
-Stable tag: 4.7.41
+Stable tag: 4.7.42
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,9 @@ For very large files (roughly 1,000+ rows), consider splitting into smaller batc
 == Changelog ==
 
 Detailed tracking begins at 4.7.2; earlier versions (4.7.1 and prior) predate this changelog.
+
+= 4.7.42 =
+* Fixed the Institute Logo print watermark still not displaying at all after the 4.7.41 fix. Root cause: an SVG used as a CSS background-image runs in a browser-enforced restricted context where an embedded image reference is not permitted to fetch a separate external resource -- referencing the logo by its plain URL inside the watermark SVG was therefore never allowed to load, regardless of sizing or container fixes. The logo's own file bytes are now read (from this site's uploads folder directly, or fetched once and cached otherwise) and embedded directly inside the watermark SVG as a self-contained data URI, leaving no external reference to block. No change to the Text watermark, which never had this issue.
 
 = 4.7.41 =
 * Fixed the Institute Logo print watermark appearing clipped, skewed, or pixelated instead of cleanly filling the marks table. Root cause: a `<table>` element with `border-collapse: collapse` does not reliably expose its full rendered box as a background-paint area across browsers/print engines, so `background-size: contain` was being sized against the wrong area. The watermark background now paints on a plain wrapping div around the table instead of the table element itself -- a reliable, standard CSS container -- with the table's existing (semi-)transparent row backgrounds showing it through exactly as before. No change to the Text watermark's tiled appearance.
