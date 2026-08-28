@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.42
+ * Version: 4.7.43
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.42' );
+define( 'ERM_VERSION', '4.7.43' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -390,7 +390,7 @@ class ExamResultManager {
             'student_class'    => __( 'Class', 'exam-result-manager' ),
             'student_section'  => __( 'Section', 'exam-result-manager' ),
             'student_rollno'   => __( 'Roll No', 'exam-result-manager' ),
-            'student_semester' => __( 'Semester', 'exam-result-manager' ),
+            'student_semester' => __( 'Semester/Term/Unit/Monthly', 'exam-result-manager' ),
             'exam_year'        => __( 'Exam Year (e.g., 2024-2025)', 'exam-result-manager' ),
         );
         foreach ( $fields as $key => $label ) {
@@ -1662,7 +1662,7 @@ class ExamResultManager {
         wp_nonce_field( 'import_exam_results_nonce' );
         echo '<p><input type="file" name="csv_file" accept=".csv" required></p>';
         echo '<p><label><input type="checkbox" name="skip_header" value="1"> ' . __( 'First row is header (skip it)', 'exam-result-manager' ) . '</label></p>';
-        echo '<p><strong>' . __( 'CSV Format (detailed):', 'exam-result-manager' ) . '</strong> ' . __( 'Roll No, Name, Class, Section, Semester, Year, Code1, Subject1, Internal1, External1, Practical1, Code2, Subject2, Internal2, External2, Practical2, ...', 'exam-result-manager' ) . '</p>';
+        echo '<p><strong>' . __( 'CSV Format (detailed):', 'exam-result-manager' ) . '</strong> ' . __( 'Roll No, Name, Class, Section, Semester/Term/Unit/Monthly, Year, Code1, Subject1, Internal1, External1, Practical1, Code2, Subject2, Internal2, External2, Practical2, ...', 'exam-result-manager' ) . '</p>';
         echo '<p class="description">' . __( 'For very large files (roughly 1,000+ rows), consider splitting into smaller batches to reduce the chance of a server timeout on shared hosting.', 'exam-result-manager' ) . '</p>';
         echo '<p><input type="submit" class="button button-primary" value="' . esc_attr__( 'Import Results', 'exam-result-manager' ) . '"></p>';
         echo '</form>';
@@ -1675,7 +1675,7 @@ class ExamResultManager {
                 <th>' . __( 'Class', 'exam-result-manager' ) . '</th>
                 <th>' . __( 'Section', 'exam-result-manager' ) . '</th>
                 <th>' . __( 'Roll No', 'exam-result-manager' ) . '</th>
-                <th>' . __( 'Semester', 'exam-result-manager' ) . '</th>
+                <th>' . __( 'Semester/Term/Unit/Monthly', 'exam-result-manager' ) . '</th>
                 <th>' . __( 'Year', 'exam-result-manager' ) . '</th>
                 <th>' . __( 'Total Marks', 'exam-result-manager' ) . '</th>
                 <th>' . __( 'Grade', 'exam-result-manager' ) . '</th>
@@ -1973,7 +1973,7 @@ class ExamResultManager {
                             <p><strong><?php _e( 'Class:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $class ); ?></p>
                             <p><strong><?php _e( 'Section:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $section ); ?></p>
                             <p><strong><?php _e( 'Roll No:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $rollno ); ?></p>
-                            <p><strong><?php _e( 'Semester:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $semester ); ?></p>
+                            <p><strong><?php _e( 'Semester/Term/Unit/Monthly:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $semester ); ?></p>
                             <p><strong><?php _e( 'Exam Year:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $year ); ?></p>
                             <?php if ( is_array( $subjects ) && ! empty( $subjects ) ) : ?>
                                 <p><strong><?php _e( 'Subject-wise Marks:', 'exam-result-manager' ); ?></strong></p>
@@ -2027,7 +2027,7 @@ class ExamResultManager {
                 }
             } else {
                 if ( isset( $_POST['search_rollno'] ) ) {
-                    echo '<div class="exam-result-not-found"><p>' . __( 'Please fill in all required fields: Roll Number, Class, Semester, and Year.', 'exam-result-manager' ) . '</p></div>';
+                    echo '<div class="exam-result-not-found"><p>' . __( 'Please fill in all required fields: Roll Number, Class, Semester/Term/Unit/Monthly, and Year.', 'exam-result-manager' ) . '</p></div>';
                 }
             }
             ?>
@@ -2042,8 +2042,8 @@ class ExamResultManager {
                         <label for="search_class" class="required-field"><?php _e( 'Class', 'exam-result-manager' ); ?></label>
                         <input type="text" id="search_class" name="search_class" placeholder="<?php esc_attr_e( 'e.g., 10', 'exam-result-manager' ); ?>" required value="<?php echo esc_attr( $search_class ); ?>">
                     </div>
-                    <div class="form-group">
-                        <label for="search_semester" class="required-field"><?php _e( 'Semester', 'exam-result-manager' ); ?></label>
+                    <div class="form-group form-group-wide">
+                        <label for="search_semester" class="required-field"><?php _e( 'Semester/Term/Unit/Monthly', 'exam-result-manager' ); ?></label>
                         <input type="text" id="search_semester" name="search_semester" placeholder="<?php esc_attr_e( 'e.g., 1st', 'exam-result-manager' ); ?>" required value="<?php echo esc_attr( $search_sem ); ?>">
                     </div>
                     <div class="form-group">

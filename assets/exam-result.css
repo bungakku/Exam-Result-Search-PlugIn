@@ -51,6 +51,22 @@
     min-width: 100px;    /* but not too small */
 }
 
+/* One field (Semester/Term/Unit/Monthly) has a longer label than the fixed
+   110px column comfortably fits on one line at this font size/weight.
+   Scoped to just this field so every other field's column width and
+   nowrap label behavior stays exactly as before. Mobile breakpoints below
+   already override .form-group generically (flex:auto, label wraps), so
+   this desktop-only sizing doesn't need its own mobile override. */
+.exam-result-search-form .form-group.form-group-wide {
+    flex: 0 1 170px;
+    min-width: 150px;
+}
+
+.exam-result-search-form .form-group.form-group-wide label {
+    white-space: normal;
+    line-height: 1.15;
+}
+
 .exam-result-search-form label {
     display: block;
     margin-bottom: 5px;

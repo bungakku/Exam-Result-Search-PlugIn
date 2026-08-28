@@ -4,7 +4,7 @@ Tags: exam, result, marks, student, marksheet, print, CSV import, GitHub updater
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 8.0
-Stable tag: 4.7.42
+Stable tag: 4.7.43
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -17,7 +17,7 @@ Exam Result Manager allows you to:
 * Choose a theme color -- applied to borders, headings, buttons, and table headers on both the website and printed marksheets. A complementary lighter shade is generated automatically for gradients on the website.
 * Store student exam results with detailed subject-wise marks (Internal, External, Practical).
 * Automatically calculate subject totals, overall total, and grades.
-* Display results on the frontend using a shortcode `[exam_result_search]` with search by Roll No, Class, Semester, and Year.
+* Display results on the frontend using a shortcode `[exam_result_search]` with search by Roll No, Class, Semester/Term/Unit/Monthly, and Year.
 * Show a fully customizable institute header (logo, name, and optional tagline) above every result card and on the printed marksheet -- logo position (left/right/above title), header alignment (left/center/right), logo size, logo-to-title spacing, and independent title/tagline font sizes are all adjustable from one settings page, and apply identically on the website and on the printout.
 * Print a clean, professional marksheet for each student (with logo and institute name).
 * Import results from CSV files in bulk.
@@ -71,7 +71,7 @@ If the check fails (e.g. no release published yet, or a network/API issue), a no
 
 The CSV must have the following columns (order matters):
 
-Roll No, Name, Class, Section, Semester, Year, then for each subject: Code, Subject Name, Internal, External, Practical.
+Roll No, Name, Class, Section, Semester/Term/Unit/Monthly, Year, then for each subject: Code, Subject Name, Internal, External, Practical.
 
 Example:
 
@@ -82,6 +82,9 @@ For very large files (roughly 1,000+ rows), consider splitting into smaller batc
 == Changelog ==
 
 Detailed tracking begins at 4.7.2; earlier versions (4.7.1 and prior) predate this changelog.
+
+= 4.7.43 =
+* Relabeled the "Semester" field to "Semester/Term/Unit/Monthly" throughout (admin entry form, Result Manager listing, frontend search form and results, validation message, CSV format description) so institutes using term-, unit-, or monthly-based academic periods aren't stuck with semester-specific wording. The field itself is unchanged -- still free text, same stored data, same CSV column position, same shortcode search parameter -- only the label text changed. Widened that one search-form column so the longer label doesn't overlap the neighboring field on desktop.
 
 = 4.7.42 =
 * Fixed the Institute Logo print watermark still not displaying at all after the 4.7.41 fix. Root cause: an SVG used as a CSS background-image runs in a browser-enforced restricted context where an embedded image reference is not permitted to fetch a separate external resource -- referencing the logo by its plain URL inside the watermark SVG was therefore never allowed to load, regardless of sizing or container fixes. The logo's own file bytes are now read (from this site's uploads folder directly, or fetched once and cached otherwise) and embedded directly inside the watermark SVG as a self-contained data URI, leaving no external reference to block. No change to the Text watermark, which never had this issue.

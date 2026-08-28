@@ -5,7 +5,7 @@
 **Requires at least:** 5.0  
 **Tested up to:** 6.7  
 **Requires PHP:** 8.0  
-**Stable tag:** 4.7.42  
+**Stable tag:** 4.7.43  
 **License:** GPLv2 or later  
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html  
 
@@ -18,7 +18,7 @@ Exam Result Manager allows you to:
 - **Choose a theme color** – applied to borders, headings, buttons, and table headers on both the website and printed marksheets. A complementary lighter shade is generated automatically for gradients on the website.
 - Store student exam results with detailed subject-wise marks (Internal, External, Practical).
 - Automatically calculate subject totals, overall total, and grades.
-- Display results on the frontend using a shortcode `[exam_result_search]` with search by Roll No, Class, Semester, and Year.
+- Display results on the frontend using a shortcode `[exam_result_search]` with search by Roll No, Class, Semester/Term/Unit/Monthly, and Year.
 - Show a fully customizable institute header (logo, name, and optional tagline) above every result card and on the printed marksheet — logo position (left/right/above title), header alignment (left/center/right), logo size, logo-to-title spacing, and independent title/tagline font sizes are all adjustable from one settings page, and apply identically on the website and on the printout.
 - Print a clean, professional marksheet for each student (with logo and institute name).
 - Import results from CSV files in bulk.
@@ -71,7 +71,7 @@ If the check fails (e.g. no release published yet, or a network/API issue), a no
 
 The CSV must have the following columns (order matters):
 
-- **Roll No**, **Name**, **Class**, **Section**, **Semester**, **Year**,  
+- **Roll No**, **Name**, **Class**, **Section**, **Semester/Term/Unit/Monthly**, **Year**,  
   then for each subject: **Code**, **Subject Name**, **Internal**, **External**, **Practical**.
 
 Example:
