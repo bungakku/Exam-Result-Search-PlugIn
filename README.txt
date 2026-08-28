@@ -4,7 +4,7 @@ Tags: exam, result, marks, student, marksheet, print, CSV import, GitHub updater
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 8.0
-Stable tag: 4.7.40
+Stable tag: 4.7.41
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,9 @@ For very large files (roughly 1,000+ rows), consider splitting into smaller batc
 == Changelog ==
 
 Detailed tracking begins at 4.7.2; earlier versions (4.7.1 and prior) predate this changelog.
+
+= 4.7.41 =
+* Fixed the Institute Logo print watermark appearing clipped, skewed, or pixelated instead of cleanly filling the marks table. Root cause: a `<table>` element with `border-collapse: collapse` does not reliably expose its full rendered box as a background-paint area across browsers/print engines, so `background-size: contain` was being sized against the wrong area. The watermark background now paints on a plain wrapping div around the table instead of the table element itself -- a reliable, standard CSS container -- with the table's existing (semi-)transparent row backgrounds showing it through exactly as before. No change to the Text watermark's tiled appearance.
 
 = 4.7.40 =
 * Fixed the Institute Logo print watermark (added in 4.7.39) still tiling/repeating across the marks table instead of appearing once, auto-fit and centered as intended -- the print stylesheet applied the same repeating background rule to both watermark sources regardless of which was selected. Now branches per source: Institute Logo displays no-repeat, centered, scaled to fit; Text keeps its original tiled/repeating display, unchanged.

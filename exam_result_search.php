@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.40
+ * Version: 4.7.41
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.40' );
+define( 'ERM_VERSION', '4.7.41' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -2082,7 +2082,7 @@ class ExamResultManager {
                 table {
                     width: 100%;
                     border-collapse: collapse;
-                    margin: 25px 0;
+                    margin: 0;
                     font-size: 14px;
                 }
                 th {
@@ -2096,8 +2096,26 @@ class ExamResultManager {
                     padding: 10px 8px;
                     border: 1px solid #cbd5e1;
                 }
+                /*
+                 * The watermark background is intentionally applied here, on a
+                 * plain wrapping div, rather than directly on <table>. A
+                 * <table> with border-collapse: collapse does not reliably
+                 * expose its full rendered box as a background-paint area
+                 * across browsers/print engines -- background-size: contain
+                 * in particular can end up sized/positioned against a row's
+                 * box rather than the whole table, clipping or skewing a
+                 * single (non-tiled) logo image. A normal block-level div
+                 * has no such quirk, so the watermark is painted on this
+                 * wrapper and the table sits on top of it with (already)
+                 * transparent/semi-transparent row backgrounds so it shows
+                 * through -- same technique, more reliable container.
+                 */
+                .erm-watermark-wrap {
+                    position: relative;
+                    margin: 25px 0;
+                }
                 <?php if ( $watermark_css ) : ?>
-                table {
+                .erm-watermark-wrap {
                     <?php echo $watermark_css; ?>
                 }
                 <?php endif; ?>
@@ -2150,6 +2168,7 @@ class ExamResultManager {
                 <p><strong><?php _e( 'Roll No:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $rollno ); ?></p>
             </div>
 
+            <div class="erm-watermark-wrap">
             <table>
                 <thead>
                     <tr>
@@ -2180,6 +2199,7 @@ class ExamResultManager {
                     <?php endforeach; ?>
                 </tbody>
             </table>
+            </div>
 
             <div class="total-grade">
                 <p><strong><?php _e( 'Overall Total:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $total ); ?> / <?php echo esc_html( $max_overall ); ?></p>
