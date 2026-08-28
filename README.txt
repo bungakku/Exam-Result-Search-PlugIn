@@ -4,7 +4,7 @@ Tags: exam, result, marks, student, marksheet, print, CSV import, GitHub updater
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 8.0
-Stable tag: 4.7.43
+Stable tag: 4.7.44
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,9 @@ For very large files (roughly 1,000+ rows), consider splitting into smaller batc
 == Changelog ==
 
 Detailed tracking begins at 4.7.2; earlier versions (4.7.1 and prior) predate this changelog.
+
+= 4.7.44 =
+* The printed marksheet subtitle now reflects whichever terminology was actually typed into the Semester/Term/Unit/Monthly field, instead of always appending the word "Semester". If the value already names its own unit (e.g. "Term 2", "Unit 3", "Monthly Test 1"), it's printed exactly as typed. A bare value with no such word (e.g. "1st", "2nd") still gets "Semester" appended, exactly as in every prior version -- so existing semester-only institutes see no change to their printouts. Note: a bare value that doesn't name its category at all (e.g. a month name like "January") can't be distinguished from a bare semester number by text alone and still falls back to the "Semester" wording; typing the category into the value itself (e.g. "Term 2" rather than just "2") gets the intended wording.
 
 = 4.7.43 =
 * Relabeled the "Semester" field to "Semester/Term/Unit/Monthly" throughout (admin entry form, Result Manager listing, frontend search form and results, validation message, CSV format description) so institutes using term-, unit-, or monthly-based academic periods aren't stuck with semester-specific wording. The field itself is unchanged -- still free text, same stored data, same CSV column position, same shortcode search parameter -- only the label text changed. Widened that one search-form column so the longer label doesn't overlap the neighboring field on desktop.

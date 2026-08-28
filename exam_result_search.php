@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.43
+ * Version: 4.7.44
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.43' );
+define( 'ERM_VERSION', '4.7.44' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -757,6 +757,44 @@ class ExamResultManager {
             return 'background-image: url("' . $url . '"); background-repeat: no-repeat; background-position: center center; background-size: contain;';
         }
         return 'background-image: url("' . $url . '"); background-repeat: repeat;';
+    }
+
+    /**
+     * Builds the printed "<value>, <year>" period label for the marksheet
+     * subtitle, adapting to whichever terminology the admin actually typed
+     * into the (free-text) Semester/Term/Unit/Monthly field.
+     *
+     * There's no separate "which category is this" field -- it's one text
+     * value -- so this infers intent from the value's own wording: if it
+     * already names its unit ("Term 2", "Unit 3", "Monthly Test 1", etc.,
+     * matched case-insensitively) it's used exactly as typed, since
+     * appending anything would be redundant ("Term 2 Semester" reads
+     * wrong). If it doesn't contain any of those words -- e.g. a bare
+     * "1st", "2nd", "II", which was the only supported style before this
+     * field covered more than semesters -- "Semester" is appended after
+     * it, exactly matching every prior version's printed output for that
+     * same input. Existing semester-only institutes therefore see no
+     * change on their printouts; only newly-adopted Term/Unit/Monthly
+     * wording benefits from this.
+     *
+     * Limitation: a bare value that doesn't name its own category (e.g. a
+     * month name like "January" with no literal word "month" in it) can't
+     * be distinguished from a bare semester number by text alone, so it
+     * still falls back to the "Semester" convention. Typing the category
+     * word into the value itself (e.g. "January" -> "Month: January", or
+     * just "Term 2" instead of "2") gets the intended wording exactly.
+     */
+    private function format_period_label( $value ) {
+        $value = trim( (string) $value );
+        if ( '' === $value ) {
+            return $value;
+        }
+        foreach ( array( 'semester', 'term', 'unit', 'month' ) as $unit_word ) {
+            if ( false !== stripos( $value, $unit_word ) ) {
+                return $value; // Already self-describing -- use exactly as typed.
+            }
+        }
+        return $value . ' ' . __( 'Semester', 'exam-result-manager' );
     }
 
     private function calculate_subject_grade( $percentage ) {
@@ -2244,7 +2282,7 @@ class ExamResultManager {
             <?php $this->render_institute_header( 'print' ); ?>
             <div class="subtitle" style="text-align:center; margin-bottom:20px;">
                 <?php _e( 'Statement of Marks', 'exam-result-manager' ); ?><br>
-                <?php echo esc_html( sprintf( __( '%1$s Semester, %2$s', 'exam-result-manager' ), $semester, $year ) ); ?>
+                <?php echo esc_html( sprintf( __( '%1$s, %2$s', 'exam-result-manager' ), $this->format_period_label( $semester ), $year ) ); ?>
             </div>
 
             <div class="student-details">
