@@ -4,7 +4,7 @@ Tags: exam, result, marks, student, marksheet, print, CSV import, GitHub updater
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 8.0
-Stable tag: 4.7.45
+Stable tag: 4.7.46
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,11 @@ For very large files (roughly 1,000+ rows), consider splitting into smaller batc
 == Changelog ==
 
 Detailed tracking begins at 4.7.2; earlier versions (4.7.1 and prior) predate this changelog.
+
+= 4.7.46 =
+* Security: the public "Print Marksheet" request now needs a per-result nonce that is generated only in the search-result markup for that exact result and verified against the posted result ID. Previously one nonce, identical for every logged-out visitor, was accepted for any result ID, so IDs could be walked one after another (up to the 15-requests-per-10-minutes limit) without searching. The global print nonce is removed from the page script data; printMarksheet() now takes the nonce as a second argument.
+* Fixed: on phones (480px and narrower) the subject-wise marks table was crushed by a narrow-screen override (Subject column about 34px wide, cells hundreds of pixels tall). The override is removed; the table now scrolls horizontally inside its container exactly as on tablets and desktops. The results table is also forced to display: table, so a theme that sets table { display: block } can no longer turn the table itself into the scroller.
+* Accessibility: the scrollable marks-table container is now keyboard-focusable and exposed as a labelled region ("Subject-wise marks"), fixing the "scrollable region must have keyboard access" failure.
 
 = 4.7.45 =
 * Widened the Auto-detect wording introduced in 4.7.44 to also recognize calendar month names/abbreviations (e.g. "January", "Jan") as self-describing, so a Monthly-convention value no longer incorrectly gets "Semester" appended. Added a new "Marksheet Period Wording" setting (Auto-detect / Always Semester / Always Term / Always Unit / Always Monthly, default Auto-detect) for institutes that always use one convention and enter genuinely ambiguous bare values (e.g. a plain "2" meant as Term 2) that no text-based auto-detection could otherwise resolve. Default behavior is unchanged from 4.7.44 for every existing value style.

@@ -164,6 +164,7 @@
     width: 100%;
     border-collapse: collapse;
     min-width: 550px;
+    display: table; /* a theme may set table { display: block }; .table-responsive must be the scroller */
 }
 
 .exam-result th,
@@ -177,17 +178,6 @@
 .exam-result th {
     background: linear-gradient(135deg, var(--primary), var(--accent));
     color: #fff;
-}
-
-@media (max-width: 480px) {
-    .exam-result th,
-    .exam-result td {
-        white-space: normal;
-        word-break: break-word;
-    }
-    .exam-result table {
-        min-width: auto;
-    }
 }
 
 /* ===== GRADE COLOR-CODING ===== */

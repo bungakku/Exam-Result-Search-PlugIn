@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.45
+ * Version: 4.7.46
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.45' );
+define( 'ERM_VERSION', '4.7.46' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -1994,8 +1994,7 @@ class ExamResultManager {
             wp_enqueue_style( 'exam-result-style', ERM_PLUGIN_URL . 'assets/exam-result.css', array(), ERM_VERSION );
             wp_enqueue_script( 'exam-result-script', ERM_PLUGIN_URL . 'assets/exam-result.js', array( 'jquery' ), ERM_VERSION, true );
             wp_localize_script( 'exam-result-script', 'examResultAjax', array(
-                'ajaxurl'    => admin_url( 'admin-ajax.php' ),
-                'print_nonce'=> wp_create_nonce( 'print_marksheet_nonce' ),
+                'ajaxurl' => admin_url( 'admin-ajax.php' ),
             ) );
 
             // Only override the stylesheet's default colors if the admin
@@ -2093,7 +2092,7 @@ class ExamResultManager {
                             <p><strong><?php _e( 'Exam Year:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $year ); ?></p>
                             <?php if ( is_array( $subjects ) && ! empty( $subjects ) ) : ?>
                                 <p><strong><?php _e( 'Subject-wise Marks:', 'exam-result-manager' ); ?></strong></p>
-                                <div class="table-responsive">
+                                <div class="table-responsive" tabindex="0" role="region" aria-label="<?php echo esc_attr__( 'Subject-wise marks', 'exam-result-manager' ); ?>">
                                     <table>
                                         <thead>
                                             <tr>
@@ -2133,7 +2132,7 @@ class ExamResultManager {
                             <p><strong><?php _e( 'Overall Total:', 'exam-result-manager' ); ?></strong> <?php echo esc_html( $total ); ?></p>
                             <p><strong><?php _e( 'Overall Grade:', 'exam-result-manager' ); ?></strong> <span data-grade="<?php echo esc_attr( $grade ); ?>"><?php echo esc_html( $grade ); ?></span></p>
 
-                            <button class="print-button" onclick="printMarksheet(<?php echo intval( $id ); ?>)"><?php _e( 'Print Marksheet', 'exam-result-manager' ); ?></button>
+                            <button class="print-button" onclick="printMarksheet(<?php echo intval( $id ); ?>, '<?php echo esc_js( wp_create_nonce( 'print_marksheet_' . intval( $id ) ) ); ?>')"><?php _e( 'Print Marksheet', 'exam-result-manager' ); ?></button>
                         </div>
                         <?php
                     endwhile;
@@ -2182,8 +2181,11 @@ class ExamResultManager {
 
     // AJAX handler for printable marksheet
     public function ajax_print_marksheet() {
-        // Verify nonce
-        if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'print_marksheet_nonce' ) ) {
+        // The nonce is minted per result, only on the page that a successful
+        // search rendered, so a visitor cannot print an ID they did not find.
+        $post_id = isset( $_POST['post_id'] ) ? absint( $_POST['post_id'] ) : 0;
+        $nonce   = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+        if ( ! $post_id || ! wp_verify_nonce( $nonce, 'print_marksheet_' . $post_id ) ) {
             wp_die( __( 'Security check failed.', 'exam-result-manager' ) );
         }
 
@@ -2192,8 +2194,7 @@ class ExamResultManager {
             wp_die();
         }
 
-        $post_id = intval( $_POST['post_id'] );
-        if ( ! $post_id || get_post_type( $post_id ) !== 'exam_result' ) {
+        if ( get_post_type( $post_id ) !== 'exam_result' ) {
             echo '<p>' . __( 'Invalid result.', 'exam-result-manager' ) . '</p>';
             wp_die();
         }
