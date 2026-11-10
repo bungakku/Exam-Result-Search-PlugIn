@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.46
+ * Version: 4.7.47
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.46' );
+define( 'ERM_VERSION', '4.7.47' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -332,6 +332,7 @@ class ExamResultManager {
         add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
         add_action( 'admin_init', array( $this, 'register_settings' ) );
         add_action( 'admin_post_import_exam_results', array( $this, 'handle_csv_import' ) );
+        add_action( 'admin_notices', array( $this, 'show_import_result_notice' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
         add_action( 'wp_ajax_print_marksheet', array( $this, 'ajax_print_marksheet' ) );
         add_action( 'wp_ajax_nopriv_print_marksheet', array( $this, 'ajax_print_marksheet' ) );
@@ -1791,7 +1792,7 @@ class ExamResultManager {
                 <th>' . __( 'Class', 'exam-result-manager' ) . '</th>
                 <th>' . __( 'Section', 'exam-result-manager' ) . '</th>
                 <th>' . __( 'Roll No', 'exam-result-manager' ) . '</th>
-                <th>' . __( 'Semester/Term/Unit/Monthly', 'exam-result-manager' ) . '</th>
+                <th>' . str_replace( '/', '/<wbr>', esc_html__( 'Semester/Term/Unit/Monthly', 'exam-result-manager' ) ) . '</th>
                 <th>' . __( 'Year', 'exam-result-manager' ) . '</th>
                 <th>' . __( 'Total Marks', 'exam-result-manager' ) . '</th>
                 <th>' . __( 'Grade', 'exam-result-manager' ) . '</th>
@@ -1973,19 +1974,45 @@ class ExamResultManager {
         }
         fclose( $handle );
 
+        // This request ends at the redirect below, so an admin_notices callback
+        // added here would never run. Hand the outcome to the next request (the
+        // Result Manager page) through a short-lived, per-user transient.
+        set_transient(
+            'erm_import_result_' . get_current_user_id(),
+            array( 'imported' => $imported, 'errors' => $errors ),
+            5 * MINUTE_IN_SECONDS
+        );
+
+        wp_redirect( add_query_arg( 'erm_import', '1', admin_url( 'edit.php?post_type=exam_result&page=exam-result-manager' ) ) );
+        exit;
+    }
+
+    // Shows the outcome of the last CSV import once, after the redirect.
+    // The transient is only looked up when the redirect flag is present, so
+    // other admin page loads cost nothing.
+    public function show_import_result_notice() {
+        if ( ! isset( $_GET['erm_import'] ) || ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+        $key    = 'erm_import_result_' . get_current_user_id();
+        $result = get_transient( $key );
+        if ( ! is_array( $result ) ) {
+            return;
+        }
+        delete_transient( $key );
+
+        $imported = isset( $result['imported'] ) ? absint( $result['imported'] ) : 0;
+        $errors   = isset( $result['errors'] ) ? absint( $result['errors'] ) : 0;
+
         if ( $imported ) {
-            add_action( 'admin_notices', function() use ( $imported ) {
-                echo '<div class="notice notice-success is-dismissible"><p>' . sprintf( __( 'Successfully imported %d results.', 'exam-result-manager' ), $imported ) . '</p></div>';
-            } );
+            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( 'Successfully imported %d results.', 'exam-result-manager' ), $imported ) ) . '</p></div>';
         }
         if ( $errors ) {
-            add_action( 'admin_notices', function() use ( $errors ) {
-                echo '<div class="notice notice-error is-dismissible"><p>' . sprintf( __( 'Failed to import %d results (duplicates or invalid data).', 'exam-result-manager' ), $errors ) . '</p></div>';
-            } );
+            echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( sprintf( __( 'Failed to import %d results (duplicates or invalid data).', 'exam-result-manager' ), $errors ) ) . '</p></div>';
         }
-
-        wp_redirect( admin_url( 'edit.php?post_type=exam_result&page=exam-result-manager' ) );
-        exit;
+        if ( ! $imported && ! $errors ) {
+            echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'No data rows were found in the CSV file.', 'exam-result-manager' ) . '</p></div>';
+        }
     }
 
     // Enqueue frontend CSS and JS

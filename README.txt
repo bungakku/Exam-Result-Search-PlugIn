@@ -4,7 +4,7 @@ Tags: exam, result, marks, student, marksheet, print, CSV import, GitHub updater
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 8.0
-Stable tag: 4.7.46
+Stable tag: 4.7.47
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,11 @@ For very large files (roughly 1,000+ rows), consider splitting into smaller batc
 == Changelog ==
 
 Detailed tracking begins at 4.7.2; earlier versions (4.7.1 and prior) predate this changelog.
+
+= 4.7.47 =
+* Fixed: after a CSV import the "Successfully imported N results" / "Failed to import N results" message never appeared, because it was registered during the request that then redirected away. The outcome is now passed to the Result Manager page through a short-lived per-user transient and shown once. A file with no data rows now shows a warning instead of nothing.
+* Fixed: on phones (480px and narrower) the search form fields are 16px, so iOS Safari no longer zooms the page when a field is tapped. Desktop and tablet sizes are unchanged.
+* Fixed: the "Semester/Term/Unit/Monthly" column heading in the admin Result Manager list could break in the middle of a word ("Monthl y"); it now wraps only at the slashes.
 
 = 4.7.46 =
 * Security: the public "Print Marksheet" request now needs a per-result nonce that is generated only in the search-result markup for that exact result and verified against the posted result ID. Previously one nonce, identical for every logged-out visitor, was accepted for any result ID, so IDs could be walked one after another (up to the 15-requests-per-10-minutes limit) without searching. The global print nonce is removed from the page script data; printMarksheet() now takes the nonce as a second argument.

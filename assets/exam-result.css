@@ -239,6 +239,11 @@
     .exam-result-search-form .form-group:last-child {
         grid-column: span 1;
     }
+    /* iOS Safari zooms the page when a field under 16px gets focus. */
+    .exam-result-search-form input[type="text"],
+    .exam-result-search-form select {
+        font-size: 16px;
+    }
     .print-button {
         width: 100%;
         text-align: center;
