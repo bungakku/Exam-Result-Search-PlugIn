@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.47
+ * Version: 4.7.48
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.47' );
+define( 'ERM_VERSION', '4.7.48' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -1885,6 +1885,12 @@ class ExamResultManager {
         if ( false === $handle ) {
             wp_die( __( 'Could not open the uploaded file for reading.', 'exam-result-manager' ) );
         }
+        // Excel's "CSV UTF-8" adds a byte-order mark. Left in place it becomes
+        // an invisible prefix on the first field of the file (e.g. the first
+        // Roll No), which could then never be matched by a search.
+        if ( "\xEF\xBB\xBF" !== fread( $handle, 3 ) ) {
+            rewind( $handle );
+        }
         if ( $skip_header ) {
             fgetcsv( $handle );
         }
@@ -1895,6 +1901,12 @@ class ExamResultManager {
         $max_per_subject = $max_internal + $max_external + $max_practical;
 
         while ( ( $data = fgetcsv( $handle ) ) !== false ) {
+            // A blank line, or a row of only empty cells (typical trailing
+            // lines in spreadsheet exports), is not a record: skip it quietly
+            // instead of reporting it as a failed import.
+            if ( '' === trim( implode( '', $data ) ) ) {
+                continue;
+            }
             if ( count( $data ) < 6 ) {
                 $errors++;
                 continue;
@@ -1905,6 +1917,13 @@ class ExamResultManager {
             $section  = $this->sanitize_formula_injection( sanitize_text_field( $data[3] ) );
             $semester = $this->sanitize_formula_injection( sanitize_text_field( $data[4] ) );
             $year     = $this->sanitize_formula_injection( sanitize_text_field( $data[5] ) );
+
+            // The public search needs Roll No, Class, Semester/Term and Year to
+            // find a result, so a row missing any of them could never be found.
+            if ( '' === $rollno || '' === $class || '' === $semester || '' === $year ) {
+                $errors++;
+                continue;
+            }
 
             $existing = get_posts( array(
                 'post_type'      => 'exam_result',

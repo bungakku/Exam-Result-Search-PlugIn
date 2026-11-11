@@ -4,7 +4,7 @@ Tags: exam, result, marks, student, marksheet, print, CSV import, GitHub updater
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 8.0
-Stable tag: 4.7.47
+Stable tag: 4.7.48
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,11 @@ For very large files (roughly 1,000+ rows), consider splitting into smaller batc
 == Changelog ==
 
 Detailed tracking begins at 4.7.2; earlier versions (4.7.1 and prior) predate this changelog.
+
+= 4.7.48 =
+* Fixed: a CSV saved as "CSV UTF-8" from Excel starts with an invisible byte-order mark; when the file has no header row, the first Roll No was stored with that hidden prefix and the student could never be found by search. The mark is now removed on import.
+* Fixed: blank lines and rows of only empty cells (common at the end of spreadsheet exports) were counted as "failed" imports. They are now skipped quietly.
+* Fixed: a CSV row with an empty Roll No, Class, Semester/Term or Year was imported even though search could never find it. Such rows are now reported as failed instead, so the mistake is visible at import time.
 
 = 4.7.47 =
 * Fixed: after a CSV import the "Successfully imported N results" / "Failed to import N results" message never appeared, because it was registered during the request that then redirected away. The outcome is now passed to the Result Manager page through a short-lived per-user transient and shown once. A file with no data rows now shows a warning instead of nothing.
