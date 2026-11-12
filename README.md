@@ -5,7 +5,7 @@
 **Requires at least:** 5.0  
 **Tested up to:** 6.7  
 **Requires PHP:** 8.0  
-**Stable tag:** 4.7.50  
+**Stable tag:** 4.7.51  
 **License:** GPLv2 or later  
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html  
 
@@ -21,7 +21,7 @@ Exam Result Manager allows you to:
 - Display results on the frontend using a shortcode `[exam_result_search]` with search by Roll No, Class, Semester/Term/Unit/Monthly, and Year.
 - Show a fully customizable institute header (logo, name, and optional tagline) above every result card and on the printed marksheet — logo position (left/right/above title), header alignment (left/center/right), logo size, logo-to-title spacing, and independent title/tagline font sizes are all adjustable from one settings page, and apply identically on the website and on the printout.
 - Print a clean, professional marksheet for each student (with logo and institute name).
-- Import results from CSV files in bulk, and export all published results to CSV (same layout) for backup or moving to another site.
+- Import results from CSV files in bulk (with a ready-made CSV template), and export all published results to CSV (same layout) for backup or moving to another site.
 - Fully responsive and mobile-friendly.
 - **Auto‑update** via GitHub – the plugin checks for new releases and shows a notification on the Plugins page, with a manual "Check for updates" link and visible error messages if the check fails.
 
@@ -82,6 +82,12 @@ Example:
 ```
 
 For very large files (roughly 1,000+ rows), consider splitting into smaller batches to reduce the chance of a server timeout on shared hosting.
+
+### CSV Template
+
+On **Exam Results** → **Result Manager**, the **Download the CSV template** link (under *Import Results from CSV*) gives you `exam-results-template.csv`: the header row for up to 8 subjects and two example rows (one with five subjects, one with three; marks may be decimals, and a subject without practical marks uses `0`). Replace the example rows with your own students, delete the subject columns you don't need, and import the file. A first row starting with "Roll No" is skipped automatically. The same file is in the plugin folder at `assets/exam-results-template.csv`.
+
+Tips when filling it in Excel: format the **Roll No** column as *Text* first, or Excel will drop leading zeros (`001` becomes `1`). Save as **CSV UTF-8** so names in Hindi, Bengali and other scripts are kept. The marks columns are Internal, External and Practical; marks above the maximums set under **Marksheet Settings** are reduced to the maximum on import.
 
 ### Exporting Results (Backup / Move to Another Site)
 

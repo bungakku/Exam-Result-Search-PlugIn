@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.50
+ * Version: 4.7.51
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.50' );
+define( 'ERM_VERSION', '4.7.51' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -333,6 +333,7 @@ class ExamResultManager {
         add_action( 'admin_init', array( $this, 'register_settings' ) );
         add_action( 'admin_post_import_exam_results', array( $this, 'handle_csv_import' ) );
         add_action( 'admin_post_export_exam_results', array( $this, 'handle_csv_export' ) );
+        add_action( 'admin_post_download_exam_template', array( $this, 'handle_template_download' ) );
         add_action( 'admin_notices', array( $this, 'show_import_result_notice' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
         add_action( 'wp_ajax_print_marksheet', array( $this, 'ajax_print_marksheet' ) );
@@ -1794,6 +1795,7 @@ class ExamResultManager {
         echo '<p><input type="file" name="csv_file" accept=".csv" required></p>';
         echo '<p><label><input type="checkbox" name="skip_header" value="1"> ' . __( 'First row is header (skip it)', 'exam-result-manager' ) . '</label></p>';
         echo '<p><strong>' . __( 'CSV Format (detailed):', 'exam-result-manager' ) . '</strong> ' . __( 'Roll No, Name, Class, Section, Semester/Term/Unit/Monthly, Year, Code1, Subject1, Internal1, External1, Practical1, Code2, Subject2, Internal2, External2, Practical2, ...', 'exam-result-manager' ) . '</p>';
+        echo '<p><a href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=download_exam_template' ), 'download_exam_template' ) ) . '">' . esc_html__( 'Download the CSV template', 'exam-result-manager' ) . '</a> ' . esc_html__( '(header row for up to 8 subjects and two example rows; replace the examples with your own data).', 'exam-result-manager' ) . '</p>';
         echo '<p class="description">' . __( 'For very large files (roughly 1,000+ rows), consider splitting into smaller batches to reduce the chance of a server timeout on shared hosting.', 'exam-result-manager' ) . '</p>';
         echo '<p><input type="submit" class="button button-primary" value="' . esc_attr__( 'Import Results', 'exam-result-manager' ) . '"></p>';
         echo '</form>';
@@ -2051,6 +2053,31 @@ class ExamResultManager {
         );
 
         wp_redirect( add_query_arg( 'erm_import', '1', admin_url( 'edit.php?post_type=exam_result&page=exam-result-manager' ) ) );
+        exit;
+    }
+
+    // Sends the bundled assets/exam-results-template.csv (header row for up to
+    // 8 subjects plus two example rows). The file ships inside the plugin and
+    // is served through here only so the download is admin-only and named.
+    public function handle_template_download() {
+        if ( ! isset( $_GET['_wpnonce'] ) ||
+             ! wp_verify_nonce( $_GET['_wpnonce'], 'download_exam_template' ) ||
+             ! current_user_can( 'manage_options' ) ) {
+            wp_die( __( 'Security check failed.', 'exam-result-manager' ) );
+        }
+
+        $file = ERM_PLUGIN_DIR . 'assets/exam-results-template.csv';
+        if ( ! is_readable( $file ) ) {
+            wp_die( __( 'The CSV template file is missing from the plugin folder. Reinstall the plugin to restore it.', 'exam-result-manager' ) );
+        }
+
+        while ( ob_get_level() > 0 ) {
+            ob_end_clean();
+        }
+        nocache_headers();
+        header( 'Content-Type: text/csv; charset=utf-8' );
+        header( 'Content-Disposition: attachment; filename="exam-results-template.csv"' );
+        readfile( $file );
         exit;
     }
 
