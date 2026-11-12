@@ -5,7 +5,7 @@
 **Requires at least:** 5.0  
 **Tested up to:** 6.7  
 **Requires PHP:** 8.0  
-**Stable tag:** 4.7.49  
+**Stable tag:** 4.7.50  
 **License:** GPLv2 or later  
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html  
 
@@ -21,7 +21,7 @@ Exam Result Manager allows you to:
 - Display results on the frontend using a shortcode `[exam_result_search]` with search by Roll No, Class, Semester/Term/Unit/Monthly, and Year.
 - Show a fully customizable institute header (logo, name, and optional tagline) above every result card and on the printed marksheet — logo position (left/right/above title), header alignment (left/center/right), logo size, logo-to-title spacing, and independent title/tagline font sizes are all adjustable from one settings page, and apply identically on the website and on the printout.
 - Print a clean, professional marksheet for each student (with logo and institute name).
-- Import results from CSV files in bulk.
+- Import results from CSV files in bulk, and export all published results to CSV (same layout) for backup or moving to another site.
 - Fully responsive and mobile-friendly.
 - **Auto‑update** via GitHub – the plugin checks for new releases and shows a notification on the Plugins page, with a manual "Check for updates" link and visible error messages if the check fails.
 
@@ -82,3 +82,9 @@ Example:
 ```
 
 For very large files (roughly 1,000+ rows), consider splitting into smaller batches to reduce the chance of a server timeout on shared hosting.
+
+### Exporting Results (Backup / Move to Another Site)
+
+On **Exam Results** → **Result Manager**, the **Export Results to CSV** card downloads every published result as `exam-results-YYYY-MM-DD.csv`, in the same layout as the import plus a header row. Drafts and private results are not included.
+
+To bring the file back (on this or another site), import it with **First row is header (skip it)** ticked. (A first row starting with "Roll No" is also skipped automatically if the box is left unticked.) Results that already exist are reported as duplicates and left unchanged. Open the file in Excel or LibreOffice as UTF-8; names in Hindi, Bengali and other scripts are kept. Marks totals and grades are recalculated on import from the marks in the file, using the maximum marks currently set under **Marksheet Settings**.

@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.49
+ * Version: 4.7.50
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.49' );
+define( 'ERM_VERSION', '4.7.50' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -332,6 +332,7 @@ class ExamResultManager {
         add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
         add_action( 'admin_init', array( $this, 'register_settings' ) );
         add_action( 'admin_post_import_exam_results', array( $this, 'handle_csv_import' ) );
+        add_action( 'admin_post_export_exam_results', array( $this, 'handle_csv_export' ) );
         add_action( 'admin_notices', array( $this, 'show_import_result_notice' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
         add_action( 'wp_ajax_print_marksheet', array( $this, 'ajax_print_marksheet' ) );
@@ -895,14 +896,13 @@ class ExamResultManager {
 
     /**
      * Neutralizes CSV/Excel formula-injection prefixes (=, +, -, @) on
-     * text fields. The plugin doesn't currently export data back to
-     * CSV/Excel anywhere, so this isn't exploitable today -- added as
-     * cheap, low-risk insurance so stored data is already safe if an
-     * export feature is ever added later. Applied uniformly regardless of
-     * how a result was entered (manual form or CSV import), since a future
-     * export would likely include both. Prepending a single quote is the
-     * standard, non-destructive neutralization: spreadsheet apps treat the
-     * cell as plain text and don't display the leading quote itself.
+     * text fields. Applied when a result is saved (manual form or CSV
+     * import) and again by the CSV export, so results stored before this
+     * guard existed are neutralized too; a value that already starts with
+     * the quote is left alone, so exporting and re-importing is stable.
+     * Prepending a single quote is the standard, non-destructive
+     * neutralization: spreadsheet apps treat the cell as plain text and
+     * don't display the leading quote itself.
      */
     private function sanitize_formula_injection( $value ) {
         $value = (string) $value;
@@ -1799,6 +1799,18 @@ class ExamResultManager {
         echo '</form>';
         echo '</div>';
 
+        if ( $query->found_posts > 0 ) {
+            echo '<div class="card" style="max-width: 600px; margin-bottom: 20px;">';
+            echo '<h2>' . esc_html__( 'Export Results to CSV', 'exam-result-manager' ) . '</h2>';
+            echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+            echo '<input type="hidden" name="action" value="export_exam_results">';
+            wp_nonce_field( 'export_exam_results_nonce' );
+            echo '<p>' . esc_html__( 'Download all published results as a CSV file in the same layout as the import above, with a header row. Use it as a backup or to move results to another site. To import the file again, tick "First row is header (skip it)" (a "Roll No" header row is also skipped automatically).', 'exam-result-manager' ) . '</p>';
+            echo '<p><input type="submit" class="button" value="' . esc_attr__( 'Export Results', 'exam-result-manager' ) . '"></p>';
+            echo '</form>';
+            echo '</div>';
+        }
+
         if ( $query->have_posts() ) {
             echo '<table class="widefat fixed striped">';
             echo '<thead><tr>
@@ -1935,6 +1947,14 @@ class ExamResultManager {
             if ( '' === $this->trim_invisible( implode( '', $data ) ) ) {
                 continue;
             }
+            // A header row that was not skipped (the "First row is header" box
+            // left unticked, e.g. with a file from Export Results) is not a
+            // record either; imported, it would become a student named "Name".
+            // Only the first row is checked, and no real Roll No reads "Roll No".
+            if ( ! $skip_header && 1 === $row_no
+                && in_array( strtolower( $this->trim_invisible( $data[0] ) ), array( 'roll no', 'roll no.', 'roll number', 'rollno', 'roll' ), true ) ) {
+                continue;
+            }
             if ( count( $data ) < 6 ) {
                 $fail( 'columns' );
                 continue;
@@ -2031,6 +2051,103 @@ class ExamResultManager {
         );
 
         wp_redirect( add_query_arg( 'erm_import', '1', admin_url( 'edit.php?post_type=exam_result&page=exam-result-manager' ) ) );
+        exit;
+    }
+
+    // CSV export handler: every published result, in the import layout.
+    public function handle_csv_export() {
+        if ( ! isset( $_POST['_wpnonce'] ) ||
+             ! wp_verify_nonce( $_POST['_wpnonce'], 'export_exam_results_nonce' ) ||
+             ! current_user_can( 'manage_options' ) ) {
+            wp_die( __( 'Security check failed.', 'exam-result-manager' ) );
+        }
+
+        if ( function_exists( 'set_time_limit' ) ) {
+            @set_time_limit( 0 );
+        }
+
+        // The header needs the widest subject count, which is only known after
+        // the last result has been read, so the rows wait in a temp stream
+        // (memory first, a temp file once it grows) until the header is written.
+        $rows = fopen( 'php://temp', 'w+' );
+        if ( false === $rows ) {
+            wp_die( __( 'Could not prepare the export file.', 'exam-result-manager' ) );
+        }
+
+        $max_subjects = 0;
+        $batch        = 200;
+        $paged        = 1;
+        do {
+            $ids = get_posts( array(
+                'post_type'      => 'exam_result',
+                'post_status'    => 'publish',
+                'posts_per_page' => $batch,
+                'paged'          => $paged,
+                'orderby'        => 'ID',
+                'order'          => 'ASC',
+                'fields'         => 'ids',
+                'no_found_rows'  => true,
+            ) );
+            if ( empty( $ids ) ) {
+                break;
+            }
+            update_meta_cache( 'post', $ids );
+
+            foreach ( $ids as $id ) {
+                $row = array();
+                foreach ( array( '_student_rollno', '_student_name', '_student_class', '_student_section', '_student_semester', '_exam_year' ) as $key ) {
+                    $row[] = $this->sanitize_formula_injection( get_post_meta( $id, $key, true ) );
+                }
+                $subjects = get_post_meta( $id, '_detailed_subjects', true );
+                $count    = 0;
+                if ( is_array( $subjects ) ) {
+                    foreach ( $subjects as $subject ) {
+                        if ( ! is_array( $subject ) ) {
+                            continue;
+                        }
+                        $row[] = $this->sanitize_formula_injection( isset( $subject['code'] ) ? $subject['code'] : '' );
+                        $row[] = $this->sanitize_formula_injection( isset( $subject['name'] ) ? $subject['name'] : '' );
+                        $row[] = isset( $subject['internal'] ) ? floatval( $subject['internal'] ) : 0;
+                        $row[] = isset( $subject['external'] ) ? floatval( $subject['external'] ) : 0;
+                        $row[] = isset( $subject['practical'] ) ? floatval( $subject['practical'] ) : 0;
+                        $count++;
+                    }
+                }
+                $max_subjects = max( $max_subjects, $count );
+                fputcsv( $rows, $row, ',', '"', '\\', "\r\n" );
+            }
+            $paged++;
+        } while ( count( $ids ) === $batch );
+
+        // Fixed English column names (not translated): the file is a data
+        // format, and the import recognizes "Roll No" in its first cell as a
+        // header whatever language the admin screen is in.
+        $header = array( 'Roll No', 'Name', 'Class', 'Section', 'Semester/Term/Unit/Monthly', 'Year' );
+        for ( $i = 1; $i <= $max_subjects; $i++ ) {
+            $header[] = 'Code' . $i;
+            $header[] = 'Subject' . $i;
+            $header[] = 'Internal' . $i;
+            $header[] = 'External' . $i;
+            $header[] = 'Practical' . $i;
+        }
+
+        // Nothing but the file may reach the browser.
+        while ( ob_get_level() > 0 ) {
+            ob_end_clean();
+        }
+        nocache_headers();
+        header( 'Content-Type: text/csv; charset=utf-8' );
+        header( 'Content-Disposition: attachment; filename="exam-results-' . current_time( 'Y-m-d' ) . '.csv"' );
+
+        $out = fopen( 'php://output', 'w' );
+        // The byte-order mark makes Excel read the file as UTF-8, so names in
+        // Hindi, Bengali and other scripts open correctly. The import strips it.
+        fwrite( $out, "\xEF\xBB\xBF" );
+        fputcsv( $out, $header, ',', '"', '\\', "\r\n" );
+        rewind( $rows );
+        stream_copy_to_stream( $rows, $out );
+        fclose( $rows );
+        fclose( $out );
         exit;
     }
 
