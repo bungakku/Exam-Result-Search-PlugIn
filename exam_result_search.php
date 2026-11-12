@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.48
+ * Version: 4.7.49
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.48' );
+define( 'ERM_VERSION', '4.7.49' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -877,6 +877,20 @@ class ExamResultManager {
             return floatval( $max );
         }
         return $value;
+    }
+
+    /**
+     * Removes spaces and invisible characters (non-breaking and other Unicode
+     * spaces, zero-width space, word joiner, soft hyphen, byte-order mark,
+     * control characters) from both ends of a value. Spreadsheets and word
+     * processors leave these behind; they make a cell look empty or look right
+     * while never matching what a student types. The zero-width joiner and
+     * non-joiner are deliberately kept: Indic scripts use them inside names.
+     */
+    private function trim_invisible( $value ) {
+        $value   = (string) $value;
+        $trimmed = preg_replace( '/^[\p{Z}\p{Cc}\x{00AD}\x{200B}\x{2060}\x{FEFF}]+|[\p{Z}\p{Cc}\x{00AD}\x{200B}\x{2060}\x{FEFF}]+$/u', '', $value );
+        return null === $trimmed ? trim( $value ) : $trimmed; // null = not valid UTF-8
     }
 
     /**
@@ -1900,28 +1914,42 @@ class ExamResultManager {
         $max_practical = get_option( 'exam_max_practical', 20 );
         $max_per_subject = $max_internal + $max_external + $max_practical;
 
+        // Row numbers follow the spreadsheet (header row = 1). The first 20
+        // failures are remembered with a reason so the notice can name them.
+        $row_no      = $skip_header ? 1 : 0;
+        $failed_rows = array();
+        $fail        = function( $reason ) use ( &$errors, &$failed_rows, &$row_no ) {
+            $errors++;
+            if ( count( $failed_rows ) < 20 ) {
+                $failed_rows[] = array( $row_no, $reason );
+            }
+        };
+
         while ( ( $data = fgetcsv( $handle ) ) !== false ) {
+            $row_no++;
             // A blank line, or a row of only empty cells (typical trailing
             // lines in spreadsheet exports), is not a record: skip it quietly
-            // instead of reporting it as a failed import.
-            if ( '' === trim( implode( '', $data ) ) ) {
+            // instead of reporting it as a failed import. Cells holding only
+            // invisible characters (non-breaking or zero-width spaces left by
+            // Excel, Word or copy-paste) count as empty too.
+            if ( '' === $this->trim_invisible( implode( '', $data ) ) ) {
                 continue;
             }
             if ( count( $data ) < 6 ) {
-                $errors++;
+                $fail( 'columns' );
                 continue;
             }
-            $rollno   = $this->sanitize_formula_injection( sanitize_text_field( $data[0] ) );
-            $name     = $this->sanitize_formula_injection( sanitize_text_field( $data[1] ) );
-            $class    = $this->sanitize_formula_injection( sanitize_text_field( $data[2] ) );
-            $section  = $this->sanitize_formula_injection( sanitize_text_field( $data[3] ) );
-            $semester = $this->sanitize_formula_injection( sanitize_text_field( $data[4] ) );
-            $year     = $this->sanitize_formula_injection( sanitize_text_field( $data[5] ) );
+            $rollno   = $this->sanitize_formula_injection( $this->trim_invisible( sanitize_text_field( $data[0] ) ) );
+            $name     = $this->sanitize_formula_injection( $this->trim_invisible( sanitize_text_field( $data[1] ) ) );
+            $class    = $this->sanitize_formula_injection( $this->trim_invisible( sanitize_text_field( $data[2] ) ) );
+            $section  = $this->sanitize_formula_injection( $this->trim_invisible( sanitize_text_field( $data[3] ) ) );
+            $semester = $this->sanitize_formula_injection( $this->trim_invisible( sanitize_text_field( $data[4] ) ) );
+            $year     = $this->sanitize_formula_injection( $this->trim_invisible( sanitize_text_field( $data[5] ) ) );
 
             // The public search needs Roll No, Class, Semester/Term and Year to
             // find a result, so a row missing any of them could never be found.
             if ( '' === $rollno || '' === $class || '' === $semester || '' === $year ) {
-                $errors++;
+                $fail( 'key' );
                 continue;
             }
 
@@ -1939,7 +1967,7 @@ class ExamResultManager {
                 ),
             ) );
             if ( ! empty( $existing ) ) {
-                $errors++;
+                $fail( 'duplicate' );
                 continue;
             }
 
@@ -1963,7 +1991,7 @@ class ExamResultManager {
                 $overall_total += $internal + $external + $practical;
             }
             if ( empty( $detailed_subjects ) ) {
-                $errors++;
+                $fail( 'subjects' );
                 continue;
             }
 
@@ -1988,7 +2016,7 @@ class ExamResultManager {
                 update_post_meta( $post_id, '_student_grade', $overall_grade );
                 $imported++;
             } else {
-                $errors++;
+                $fail( 'save' );
             }
         }
         fclose( $handle );
@@ -1998,7 +2026,7 @@ class ExamResultManager {
         // Result Manager page) through a short-lived, per-user transient.
         set_transient(
             'erm_import_result_' . get_current_user_id(),
-            array( 'imported' => $imported, 'errors' => $errors ),
+            array( 'imported' => $imported, 'errors' => $errors, 'rows' => $failed_rows ),
             5 * MINUTE_IN_SECONDS
         );
 
@@ -2027,7 +2055,24 @@ class ExamResultManager {
             echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( 'Successfully imported %d results.', 'exam-result-manager' ), $imported ) ) . '</p></div>';
         }
         if ( $errors ) {
-            echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( sprintf( __( 'Failed to import %d results (duplicates or invalid data).', 'exam-result-manager' ), $errors ) ) . '</p></div>';
+            $reasons = array(
+                'columns'   => __( 'fewer than 6 columns (wrong separator?)', 'exam-result-manager' ),
+                'key'       => __( 'Roll No, Class, Semester/Term or Year is empty', 'exam-result-manager' ),
+                'duplicate' => __( 'already exists', 'exam-result-manager' ),
+                'subjects'  => __( 'no subject marks found', 'exam-result-manager' ),
+                'save'      => __( 'could not be saved', 'exam-result-manager' ),
+            );
+            $lines = array();
+            $rows  = isset( $result['rows'] ) && is_array( $result['rows'] ) ? $result['rows'] : array();
+            foreach ( $rows as $row ) {
+                if ( is_array( $row ) && isset( $row[0], $row[1], $reasons[ $row[1] ] ) ) {
+                    $lines[] = esc_html( sprintf( __( 'Row %1$d: %2$s', 'exam-result-manager' ), absint( $row[0] ), $reasons[ $row[1] ] ) );
+                }
+            }
+            if ( $lines && $errors > count( $lines ) ) {
+                $lines[] = esc_html( sprintf( __( '...and %d more.', 'exam-result-manager' ), $errors - count( $lines ) ) );
+            }
+            echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( sprintf( __( 'Failed to import %d results (duplicates or invalid data).', 'exam-result-manager' ), $errors ) ) . '</p>' . ( $lines ? '<p>' . implode( '<br>', $lines ) . '</p>' : '' ) . '</div>';
         }
         if ( ! $imported && ! $errors ) {
             echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html__( 'No data rows were found in the CSV file.', 'exam-result-manager' ) . '</p></div>';
