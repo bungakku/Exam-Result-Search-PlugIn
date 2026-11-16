@@ -4,7 +4,7 @@ Tags: exam, result, marks, student, marksheet, print, CSV import, GitHub updater
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 8.0
-Stable tag: 4.7.51
+Stable tag: 4.7.52
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -95,6 +95,9 @@ To bring the file back (on this or another site), import it with "First row is h
 == Changelog ==
 
 Detailed tracking begins at 4.7.2; earlier versions (4.7.1 and prior) predate this changelog.
+
+= 4.7.52 =
+* Improved: the CSV import now tells you when marks were reduced. Marks above the configured maximum (Marksheet Settings: Internal / External / Practical) have always been cut down to the maximum; after an import a warning now shows how many marks and results were affected, the maximums that were applied and the spreadsheet row numbers (first 20), with a hint on how to fix it. The Import card also shows the current maximums. Marking itself is unchanged.
 
 = 4.7.51 =
 * Added: ready-made CSV template. A "Download the CSV template" link under Import Results from CSV downloads exam-results-template.csv (header row for up to 8 subjects, two example rows, UTF-8 with byte-order mark for Excel). The file is bundled in the plugin at assets/exam-results-template.csv and is served to administrators only.

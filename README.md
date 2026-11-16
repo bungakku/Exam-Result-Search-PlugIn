@@ -5,7 +5,7 @@
 **Requires at least:** 5.0  
 **Tested up to:** 6.7  
 **Requires PHP:** 8.0  
-**Stable tag:** 4.7.51  
+**Stable tag:** 4.7.52  
 **License:** GPLv2 or later  
 **License URI:** https://www.gnu.org/licenses/gpl-2.0.html  
 
@@ -82,6 +82,8 @@ Example:
 ```
 
 For very large files (roughly 1,000+ rows), consider splitting into smaller batches to reduce the chance of a server timeout on shared hosting.
+
+Marks above the maximum set in **Marksheet Settings** (default Internal 10, External 70, Practical 20) are reduced to that maximum. The Import card shows the current maximums, and after an import a warning reports how many marks were reduced, in which rows, and the maximums applied. If your marks use a larger scale, raise the maximums, move the affected results to the Trash and import the file again.
 
 ### CSV Template
 

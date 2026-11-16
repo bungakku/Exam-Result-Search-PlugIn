@@ -3,7 +3,7 @@
  * Plugin Name: Exam Result Manager
  * Plugin URI: https://github.com/bungakku/Exam-Result-Search-PlugIn
  * Description: Exam Results Manager with detailed subject marks and printable function.
- * Version: 4.7.51
+ * Version: 4.7.52
  * Requires PHP: 8.0
  * Author: Biswajit Thokchom
  * Author URI: https://github.com/bungakku
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'ERM_VERSION', '4.7.51' );
+define( 'ERM_VERSION', '4.7.52' );
 define( 'ERM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ERM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'ERM_GITHUB_REPO', 'bungakku/Exam-Result-Search-PlugIn' );
@@ -879,6 +879,14 @@ class ExamResultManager {
             return floatval( $max );
         }
         return $value;
+    }
+
+    /**
+     * True when clamp_mark() would cut $value down to $max (same condition),
+     * so the CSV import can tell the admin how many marks were reduced.
+     */
+    private function exceeds_max( $value, $max ) {
+        return $max > 0 && floatval( $value ) > $max;
     }
 
     /**
@@ -1795,6 +1803,20 @@ class ExamResultManager {
         echo '<p><input type="file" name="csv_file" accept=".csv" required></p>';
         echo '<p><label><input type="checkbox" name="skip_header" value="1"> ' . __( 'First row is header (skip it)', 'exam-result-manager' ) . '</label></p>';
         echo '<p><strong>' . __( 'CSV Format (detailed):', 'exam-result-manager' ) . '</strong> ' . __( 'Roll No, Name, Class, Section, Semester/Term/Unit/Monthly, Year, Code1, Subject1, Internal1, External1, Practical1, Code2, Subject2, Internal2, External2, Practical2, ...', 'exam-result-manager' ) . '</p>';
+        // A maximum of 0 means "not configured" (no upper bound, see clamp_mark).
+        $lim = function( $max ) {
+            return absint( $max ) > 0 ? (string) absint( $max ) : __( 'no limit', 'exam-result-manager' );
+        };
+        echo '<p class="description">' . wp_kses(
+            sprintf(
+                __( 'Marks above the maximum are reduced to it (currently Internal %1$s, External %2$s, Practical %3$s). Change the maximums in <a href="%4$s">Marksheet Settings</a>.', 'exam-result-manager' ),
+                esc_html( $lim( get_option( 'exam_max_internal', 10 ) ) ),
+                esc_html( $lim( get_option( 'exam_max_external', 70 ) ) ),
+                esc_html( $lim( get_option( 'exam_max_practical', 20 ) ) ),
+                esc_url( admin_url( 'edit.php?post_type=exam_result&page=exam-result-settings' ) )
+            ),
+            array( 'a' => array( 'href' => array() ) )
+        ) . '</p>';
         echo '<p><a href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=download_exam_template' ), 'download_exam_template' ) ) . '">' . esc_html__( 'Download the CSV template', 'exam-result-manager' ) . '</a> ' . esc_html__( '(header row for up to 8 subjects and two example rows; replace the examples with your own data).', 'exam-result-manager' ) . '</p>';
         echo '<p class="description">' . __( 'For very large files (roughly 1,000+ rows), consider splitting into smaller batches to reduce the chance of a server timeout on shared hosting.', 'exam-result-manager' ) . '</p>';
         echo '<p><input type="submit" class="button button-primary" value="' . esc_attr__( 'Import Results', 'exam-result-manager' ) . '"></p>';
@@ -1932,6 +1954,11 @@ class ExamResultManager {
         // failures are remembered with a reason so the notice can name them.
         $row_no      = $skip_header ? 1 : 0;
         $failed_rows = array();
+        // Marks above the configured maximum are cut down to it (clamp_mark).
+        // Count them, for imported rows only, so the notice can say so.
+        $clamped_marks = 0;
+        $clamped_count = 0;
+        $clamped_rows  = array();
         $fail        = function( $reason ) use ( &$errors, &$failed_rows, &$row_no ) {
             $errors++;
             if ( count( $failed_rows ) < 20 ) {
@@ -1995,6 +2022,7 @@ class ExamResultManager {
 
             $detailed_subjects = array();
             $overall_total = 0;
+            $row_clamped = 0;
             for ( $i = 6; $i < count( $data ); $i += 5 ) {
                 if ( $i + 4 >= count( $data ) ) break;
                 $code = $this->sanitize_formula_injection( sanitize_text_field( $data[ $i ] ) );
@@ -2003,6 +2031,9 @@ class ExamResultManager {
                 $external = $this->clamp_mark( $data[ $i + 3 ], $max_external );
                 $practical = $this->clamp_mark( $data[ $i + 4 ], $max_practical );
                 if ( empty( $subj_name ) ) continue;
+                $row_clamped += (int) $this->exceeds_max( $data[ $i + 2 ], $max_internal )
+                              + (int) $this->exceeds_max( $data[ $i + 3 ], $max_external )
+                              + (int) $this->exceeds_max( $data[ $i + 4 ], $max_practical );
                 $detailed_subjects[] = array(
                     'code'      => $code,
                     'name'      => $subj_name,
@@ -2037,6 +2068,13 @@ class ExamResultManager {
                 update_post_meta( $post_id, '_student_marks', $overall_total );
                 update_post_meta( $post_id, '_student_grade', $overall_grade );
                 $imported++;
+                if ( $row_clamped ) {
+                    $clamped_marks += $row_clamped;
+                    $clamped_count++;
+                    if ( count( $clamped_rows ) < 20 ) {
+                        $clamped_rows[] = $row_no;
+                    }
+                }
             } else {
                 $fail( 'save' );
             }
@@ -2048,7 +2086,17 @@ class ExamResultManager {
         // Result Manager page) through a short-lived, per-user transient.
         set_transient(
             'erm_import_result_' . get_current_user_id(),
-            array( 'imported' => $imported, 'errors' => $errors, 'rows' => $failed_rows ),
+            array(
+                'imported' => $imported,
+                'errors'   => $errors,
+                'rows'     => $failed_rows,
+                'clamped'  => array(
+                    'marks'   => $clamped_marks,
+                    'results' => $clamped_count,
+                    'rows'    => $clamped_rows,
+                    'max'     => array( absint( $max_internal ), absint( $max_external ), absint( $max_practical ) ),
+                ),
+            ),
             5 * MINUTE_IN_SECONDS
         );
 
@@ -2197,6 +2245,40 @@ class ExamResultManager {
 
         if ( $imported ) {
             echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sprintf( __( 'Successfully imported %d results.', 'exam-result-manager' ), $imported ) ) . '</p></div>';
+        }
+        // Marks above the configured maximum were cut down to it during the
+        // import (clamp_mark). Say so, with the maxima that were applied.
+        $clamped = isset( $result['clamped'] ) && is_array( $result['clamped'] ) ? $result['clamped'] : array();
+        $c_marks = isset( $clamped['marks'] ) ? absint( $clamped['marks'] ) : 0;
+        if ( $c_marks ) {
+            $c_results = isset( $clamped['results'] ) ? absint( $clamped['results'] ) : 0;
+            $c_max     = isset( $clamped['max'] ) && is_array( $clamped['max'] ) ? array_values( $clamped['max'] ) : array();
+            $c_max     = array_map(
+                function( $m ) {
+                    return absint( $m ) > 0 ? (string) absint( $m ) : __( 'no limit', 'exam-result-manager' );
+                },
+                array_pad( $c_max, 3, 0 )
+            );
+            $c_rows    = isset( $clamped['rows'] ) && is_array( $clamped['rows'] ) ? array_map( 'absint', $clamped['rows'] ) : array();
+            $c_list    = implode( ', ', $c_rows );
+            if ( $c_rows && $c_results > count( $c_rows ) ) {
+                $c_list .= ' ' . sprintf( __( '...and %d more.', 'exam-result-manager' ), $c_results - count( $c_rows ) );
+            }
+            echo '<div class="notice notice-warning is-dismissible"><p>'
+                . esc_html( sprintf(
+                    __( 'Marks above the maximum were reduced to it. Marks reduced: %1$d, results affected: %2$d. Maximums applied: Internal %3$s, External %4$s, Practical %5$s.', 'exam-result-manager' ),
+                    $c_marks, $c_results, $c_max[0], $c_max[1], $c_max[2]
+                ) ) . '</p>';
+            if ( $c_list ) {
+                echo '<p>' . esc_html( sprintf( __( 'Rows: %s', 'exam-result-manager' ), $c_list ) ) . '</p>';
+            }
+            echo '<p>' . wp_kses(
+                sprintf(
+                    __( 'If your marks use a larger scale, raise the maximums in <a href="%s">Marksheet Settings</a>, move the affected results to the Trash and import the file again.', 'exam-result-manager' ),
+                    esc_url( admin_url( 'edit.php?post_type=exam_result&page=exam-result-settings' ) )
+                ),
+                array( 'a' => array( 'href' => array() ) )
+            ) . '</p></div>';
         }
         if ( $errors ) {
             $reasons = array(
